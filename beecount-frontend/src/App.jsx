@@ -12,6 +12,7 @@ import Budgets from './pages/Budgets';
 import Tags from './pages/Tags';
 import DataImportExport from './pages/DataImportExport';
 import AI from './pages/AI';
+import Statistics from './pages/Statistics';
 
 // 创建主题
 const theme = createTheme({
@@ -35,10 +36,11 @@ function App() {
               <Route path="categories" element={<Categories />} />
               <Route path="transactions" element={<Transactions />} />
               <Route path="budgets" element={<Budgets />} />
-              <Route path="tags" element={<Tags />} />
-              <Route path="data" element={<DataImportExport />} />
-              <Route path="ai" element={<AI />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="/tags" element={<Tags />} />
+            <Route path="/data" element={<DataImportExport />} />
+            <Route path="/ai" element={<AI />} />
+            <Route path="/statistics" element={<Statistics />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
         </Router>

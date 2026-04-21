@@ -108,18 +108,15 @@ func RegisterRoutes(r *gin.Engine) {
 		export.GET("/csv/categories", ExportCategoriesCSV)
 	}
 
-	import := api.Group("/import")
+	importGroup := api.Group("/import")
 	{
-		import.POST("/csv/transactions", ImportTransactionsCSV)
-		import.POST("/csv/accounts", ImportAccountsCSV)
-		import.POST("/csv/categories", ImportCategoriesCSV)
+		importGroup.POST("/csv/transactions", ImportTransactionsCSV)
+		importGroup.POST("/csv/accounts", ImportAccountsCSV)
+		importGroup.POST("/csv/categories", ImportCategoriesCSV)
 	}
 
-	// 周期交易相关路由
-	recurring := api.Group("/recurring")
-	{
-		recurring.POST("/generate", GenerateRecurringTransactions)
-	}
+	// 扩展重复交易路由以添加 generate 端点
+	recurring.POST("/generate", GenerateRecurringTransactions)
 
 	// AI相关路由
 	ai := api.Group("/ai")
@@ -127,5 +124,11 @@ func RegisterRoutes(r *gin.Engine) {
 		ai.POST("/chat", AIChat)
 		ai.POST("/analyze-transaction", AnalyzeTransaction)
 		ai.POST("/suggest-budget", SuggestBudget)
+	}
+
+	// 统计分析相关路由
+	stats := api.Group("/statistics")
+	{
+		stats.GET("", GetStatistics)
 	}
 }

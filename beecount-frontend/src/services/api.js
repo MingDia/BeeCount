@@ -92,4 +92,9 @@ export const attachmentAPI = {
   delete: (id) => api.delete(`/attachments/${id}`),
 };
 
+// 统计分析 API
+export const statisticsAPI = {
+  getStatistics: (params) => api.get('/statistics', { params }),
+};
+
 export default api;

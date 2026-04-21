@@ -969,9 +969,9 @@ func ExportCategoriesCSV(c *gin.Context) {
 	c.Writer.WriteString("ID,Name,Kind,Icon,ParentID,Level\n")
 
 	// 写入分类数据
-	for _, c := range categories {
+	for _, cat := range categories {
 		c.Writer.WriteString(fmt.Sprintf("%d,%s,%s,%s,%d,%d\n",
-			c.ID, c.Name, c.Kind, c.Icon, c.ParentID, c.Level))
+			cat.ID, cat.Name, cat.Kind, cat.Icon, cat.ParentID, cat.Level))
 	}
 }
 
@@ -1235,7 +1235,7 @@ func AIChat(c *gin.Context) {
 	// 为了演示，返回模拟数据
 	response := map[string]interface{}{
 		"response": "我是你的记账助手，有什么可以帮你的吗？",
-		"suggestions": ["查看本月支出", "设置预算提醒", "分析消费习惯"]
+		"suggestions": []string{"查看本月支出", "设置预算提醒", "分析消费习惯"},
 	}
 
 	c.JSON(http.StatusOK, Response{Success: true, Data: response})
@@ -1265,7 +1265,7 @@ func AnalyzeTransaction(c *gin.Context) {
 	analysis := map[string]interface{}{
 		"transaction": transaction,
 		"analysis": "这笔交易属于日常消费，金额在合理范围内",
-		"suggestions": ["可以考虑设置该分类的预算", "建议定期查看此类消费趋势"]
+		"suggestions": []string{"可以考虑设置该分类的预算", "建议定期查看此类消费趋势"},
 	}
 
 	c.JSON(http.StatusOK, Response{Success: true, Data: analysis})
@@ -1303,14 +1303,165 @@ func SuggestBudget(c *gin.Context) {
 	suggestion := map[string]interface{}{
 		"total_expense": totalExpense,
 		"suggested_budget": totalExpense * 0.9, // 建议预算为总支出的90%
-		"category_suggestions": [
+		"category_suggestions": []map[string]interface{}{
 			{"category": "餐饮", "suggested_budget": totalExpense * 0.3},
 			{"category": "交通", "suggested_budget": totalExpense * 0.15},
 			{"category": "购物", "suggested_budget": totalExpense * 0.2},
 			{"category": "娱乐", "suggested_budget": totalExpense * 0.1},
-			{"category": "其他", "suggested_budget": totalExpense * 0.25}
-		]
+			{"category": "其他", "suggested_budget": totalExpense * 0.25},
+		},
 	}
 
 	c.JSON(http.StatusOK, Response{Success: true, Data: suggestion})
+}
+
+// GetStatistics 获取统计数据
+func GetStatistics(c *gin.Context) {
+	// 获取参数
+	ledgerIDStr := c.DefaultQuery("ledger_id", "1")
+	scope := c.DefaultQuery("scope", "month") // month/year/all
+	statType := c.DefaultQuery("type", "expense") // expense/income/balance
+
+	ledgerID, err := strconv.ParseUint(ledgerIDStr, 10, 32)
+	if err != nil {
+		ledgerID = 1
+	}
+
+	now := time.Now()
+	var startDate, endDate time.Time
+
+	// 计算时间范围
+	switch scope {
+	case "month":
+		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		endDate = now
+	case "year":
+		startDate = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
+		endDate = now
+	case "all":
+		startDate = time.Date(1970, 1, 1, 0, 0, 0, 0, now.Location())
+		endDate = now
+	}
+
+	// 计算总收入和总支出
+	var totalIncome, totalExpense float64
+	var incomeCount, expenseCount int64
+
+	// 计算收入
+	utils.DB.Model(&models.Transaction{}).
+		Where("ledger_id = ? AND type = ? AND happened_at BETWEEN ? AND ?", uint(ledgerID), "income", startDate, endDate).
+		Select("COALESCE(SUM(amount), 0)").Row().Scan(&totalIncome)
+
+	utils.DB.Model(&models.Transaction{}).
+		Where("ledger_id = ? AND type = ? AND happened_at BETWEEN ? AND ?", uint(ledgerID), "income", startDate, endDate).
+		Count(&incomeCount)
+
+	// 计算支出
+	utils.DB.Model(&models.Transaction{}).
+		Where("ledger_id = ? AND type = ? AND happened_at BETWEEN ? AND ?", uint(ledgerID), "expense", startDate, endDate).
+		Select("COALESCE(SUM(amount), 0)").Row().Scan(&totalExpense)
+
+	utils.DB.Model(&models.Transaction{}).
+		Where("ledger_id = ? AND type = ? AND happened_at BETWEEN ? AND ?", uint(ledgerID), "expense", startDate, endDate).
+		Count(&expenseCount)
+
+	// 获取分类统计
+	var categoryTotals []map[string]interface{}
+	var categories []models.Category
+	if err := utils.DB.Where("kind = ? AND level = 1", statType).Find(&categories).Error; err == nil {
+		for _, cat := range categories {
+			var total float64
+			utils.DB.Model(&models.Transaction{}).
+				Where("ledger_id = ? AND type = ? AND category_id = ? AND happened_at BETWEEN ? AND ?",
+					uint(ledgerID), statType, cat.ID, startDate, endDate).
+				Select("COALESCE(SUM(amount), 0)").Row().Scan(&total)
+
+			if total > 0 {
+				percent := 0.0
+				if statType == "expense" && totalExpense > 0 {
+					percent = (total / totalExpense) * 100
+				} else if statType == "income" && totalIncome > 0 {
+					percent = (total / totalIncome) * 100
+				}
+				categoryTotals = append(categoryTotals, map[string]interface{}{
+					"category": cat,
+					"total":    total,
+					"percent":  percent,
+				})
+			}
+		}
+	}
+
+	// 计算趋势数据（简化版本）
+	var trendData []map[string]interface{}
+
+	// 简化趋势数据 - 按月或年分组
+	if scope == "month" {
+		daysInMonth := time.Date(now.Year(), now.Month()+1, 0, 0, 0, 0, 0, now.Location()).Day()
+		for day := 1; day <= daysInMonth; day++ {
+			date := time.Date(now.Year(), now.Month(), day, 0, 0, 0, 0, now.Location())
+			if date.After(endDate) {
+				break
+			}
+			dayStart := date
+			dayEnd := date.Add(24*time.Hour - time.Second)
+
+			var dayIncome, dayExpense float64
+			utils.DB.Model(&models.Transaction{}).
+				Where("ledger_id = ? AND type = ? AND happened_at BETWEEN ? AND ?", uint(ledgerID), "income", dayStart, dayEnd).
+				Select("COALESCE(SUM(amount), 0)").Row().Scan(&dayIncome)
+			utils.DB.Model(&models.Transaction{}).
+				Where("ledger_id = ? AND type = ? AND happened_at BETWEEN ? AND ?", uint(ledgerID), "expense", dayStart, dayEnd).
+				Select("COALESCE(SUM(amount), 0)").Row().Scan(&dayExpense)
+
+			trendData = append(trendData, map[string]interface{}{
+				"date":    date,
+				"income":  dayIncome,
+				"expense": dayExpense,
+			})
+		}
+	} else {
+		// 对于 year 或 all 范围，使用月度数据
+		for month := 1; month <= 12; month++ {
+			monthStart := time.Date(now.Year(), time.Month(month), 1, 0, 0, 0, 0, now.Location())
+			monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
+			if monthEnd.After(endDate) {
+				monthEnd = endDate
+			}
+
+			var monthIncome, monthExpense float64
+			utils.DB.Model(&models.Transaction{}).
+				Where("ledger_id = ? AND type = ? AND happened_at BETWEEN ? AND ?", uint(ledgerID), "income", monthStart, monthEnd).
+				Select("COALESCE(SUM(amount), 0)").Row().Scan(&monthIncome)
+			utils.DB.Model(&models.Transaction{}).
+				Where("ledger_id = ? AND type = ? AND happened_at BETWEEN ? AND ?", uint(ledgerID), "expense", monthStart, monthEnd).
+				Select("COALESCE(SUM(amount), 0)").Row().Scan(&monthExpense)
+
+			trendData = append(trendData, map[string]interface{}{
+				"month":   month,
+				"income":  monthIncome,
+				"expense": monthExpense,
+			})
+		}
+	}
+
+	// 构建响应
+	result := map[string]interface{}{
+		"summary": map[string]interface{}{
+			"total_income":  totalIncome,
+			"total_expense": totalExpense,
+			"balance":       totalIncome - totalExpense,
+			"income_count":  incomeCount,
+			"expense_count": expenseCount,
+		},
+		"category_totals": categoryTotals,
+		"trend_data":      trendData,
+		"time_range": map[string]interface{}{
+			"start": startDate,
+			"end":   endDate,
+			"scope": scope,
+		},
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: result})
 }
