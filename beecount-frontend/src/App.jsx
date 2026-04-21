@@ -10,6 +10,7 @@ import Categories from './pages/Categories';
 import Transactions from './pages/Transactions';
 import Budgets from './pages/Budgets';
 import Tags from './pages/Tags';
+import RecurringTransactions from './pages/RecurringTransactions';
 import DataImportExport from './pages/DataImportExport';
 import AI from './pages/AI';
 import Statistics from './pages/Statistics';
@@ -36,11 +37,12 @@ function App() {
               <Route path="categories" element={<Categories />} />
               <Route path="transactions" element={<Transactions />} />
               <Route path="budgets" element={<Budgets />} />
-              <Route path="/tags" element={<Tags />} />
-            <Route path="/data" element={<DataImportExport />} />
-            <Route path="/ai" element={<AI />} />
-            <Route path="/statistics" element={<Statistics />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="tags" element={<Tags />} />
+              <Route path="recurring" element={<RecurringTransactions />} />
+              <Route path="data" element={<DataImportExport />} />
+              <Route path="ai" element={<AI />} />
+              <Route path="statistics" element={<Statistics />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
         </Router>

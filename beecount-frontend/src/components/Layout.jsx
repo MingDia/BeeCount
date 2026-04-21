@@ -42,6 +42,7 @@ const menuItems = [
   { text: '账户', icon: <AccountBalanceWallet />, path: '/accounts' },
   { text: '分类', icon: <Category />, path: '/categories' },
   { text: '交易', icon: <Receipt />, path: '/transactions' },
+  { text: '周期交易', icon: <Receipt />, path: '/recurring' },
   { text: '预算', icon: <Budget />, path: '/budgets' },
   { text: '标签', icon: <Label />, path: '/tags' },
   { text: '统计分析', icon: <BarChart />, path: '/statistics' },
