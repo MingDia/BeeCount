@@ -6,6 +6,10 @@ import { AppProvider } from './contexts/AppContext';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Accounts from './pages/Accounts';
+import Categories from './pages/Categories';
+import Transactions from './pages/Transactions';
+import Budgets from './pages/Budgets';
+import Tags from './pages/Tags';
 
 // 创建主题
 const theme = createTheme({
@@ -26,11 +30,10 @@ function App() {
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />
               <Route path="accounts" element={<Accounts />} />
-              {/* 占位符路线 */}
-              <Route path="categories" element={<div>分类页面 (开发中)</div>} />
-              <Route path="transactions" element={<div>交易页面 (开发中)</div>} />
-              <Route path="budgets" element={<div>预算页面 (开发中)</div>} />
-              <Route path="tags" element={<div>标签页面 (开发中)</div>} />
+              <Route path="categories" element={<Categories />} />
+              <Route path="transactions" element={<Transactions />} />
+              <Route path="budgets" element={<Budgets />} />
+              <Route path="tags" element={<Tags />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

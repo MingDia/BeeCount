@@ -27,6 +27,11 @@ func main() {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
+	// 从旧数据库迁移数据或创建默认数据
+	if err := utils.MigrateFromOldDB("./old_beecount.db"); err != nil {
+		log.Fatalf("Failed to migrate data: %v", err)
+	}
+
 	// 初始化Gin引擎
 	r := gin.Default()
 
