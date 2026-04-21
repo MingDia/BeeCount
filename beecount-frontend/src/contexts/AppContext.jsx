@@ -162,29 +162,47 @@ export function AppProvider({ children }) {
     fetchInitialData();
   }, []);
 
+  // 当选中账本变化时，获取对应账本的数据
+  useEffect(() => {
+    if (state.selectedLedger) {
+      fetchLedgerData(state.selectedLedger.id);
+    }
+  }, [state.selectedLedger]);
+
   const fetchInitialData = async () => {
     dispatch({ type: AppActionTypes.SET_LOADING, payload: true });
     try {
-      const [ledgersRes, accountsRes, categoriesRes, transactionsRes, tagsRes, budgetsRes] = await Promise.all([
+      const [ledgersRes, tagsRes, categoriesRes] = await Promise.all([
         ledgerAPI.getAll(),
-        accountAPI.getAll(),
-        categoryAPI.getAll(),
-        transactionAPI.getAll(),
         tagAPI.getAll(),
-        budgetAPI.getAll(),
+        categoryAPI.getAll(),
       ]);
 
       dispatch({ type: AppActionTypes.SET_LEDGERS, payload: ledgersRes.data.data });
-      dispatch({ type: AppActionTypes.SET_ACCOUNTS, payload: accountsRes.data.data });
-      dispatch({ type: AppActionTypes.SET_CATEGORIES, payload: categoriesRes.data.data });
-      dispatch({ type: AppActionTypes.SET_TRANSACTIONS, payload: transactionsRes.data.data });
       dispatch({ type: AppActionTypes.SET_TAGS, payload: tagsRes.data.data });
-      dispatch({ type: AppActionTypes.SET_BUDGETS, payload: budgetsRes.data.data });
+      dispatch({ type: AppActionTypes.SET_CATEGORIES, payload: categoriesRes.data.data });
 
       // 选择第一个账本作为默认
       if (ledgersRes.data.data.length > 0) {
         dispatch({ type: AppActionTypes.SET_SELECTED_LEDGER, payload: ledgersRes.data.data[0] });
       }
+    } catch (error) {
+      dispatch({ type: AppActionTypes.SET_ERROR, payload: error.message });
+    }
+  };
+
+  const fetchLedgerData = async (ledgerId) => {
+    dispatch({ type: AppActionTypes.SET_LOADING, payload: true });
+    try {
+      const [accountsRes, transactionsRes, budgetsRes] = await Promise.all([
+        ledgerAPI.getAccounts(ledgerId),
+        ledgerAPI.getTransactions(ledgerId),
+        ledgerAPI.getBudgets(ledgerId),
+      ]);
+
+      dispatch({ type: AppActionTypes.SET_ACCOUNTS, payload: accountsRes.data.data });
+      dispatch({ type: AppActionTypes.SET_TRANSACTIONS, payload: transactionsRes.data.data });
+      dispatch({ type: AppActionTypes.SET_BUDGETS, payload: budgetsRes.data.data });
     } catch (error) {
       dispatch({ type: AppActionTypes.SET_ERROR, payload: error.message });
     }
@@ -236,7 +254,7 @@ export function AppProvider({ children }) {
   // 账户操作
   const createAccount = async (data) => {
     try {
-      const res = await accountAPI.create(data);
+      const res = await accountAPI.create({ ...data, ledger_id: state.selectedLedger?.id });
       dispatch({ type: AppActionTypes.ADD_ACCOUNT, payload: res.data.data });
       return res.data;
     } catch (error) {
@@ -302,7 +320,7 @@ export function AppProvider({ children }) {
   // 交易操作
   const createTransaction = async (data) => {
     try {
-      const res = await transactionAPI.create(data);
+      const res = await transactionAPI.create({ ...data, ledger_id: state.selectedLedger?.id });
       dispatch({ type: AppActionTypes.ADD_TRANSACTION, payload: res.data.data });
       return res.data;
     } catch (error) {
@@ -368,7 +386,7 @@ export function AppProvider({ children }) {
   // 预算操作
   const createBudget = async (data) => {
     try {
-      const res = await budgetAPI.create(data);
+      const res = await budgetAPI.create({ ...data, ledger_id: state.selectedLedger?.id });
       dispatch({ type: AppActionTypes.ADD_BUDGET, payload: res.data.data });
       return res.data;
     } catch (error) {
