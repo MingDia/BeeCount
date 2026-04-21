@@ -25,8 +25,10 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Alert,
+  LinearProgress,
 } from '@mui/material';
-import { Add, Delete, Edit, Search } from '@mui/icons-material';
+import { Add, Delete, Edit, Search, UploadFile, PictureAsPdf, Cancel } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -38,6 +40,7 @@ function Transactions() {
     transactions, 
     accounts, 
     categories, 
+    tags, 
     createTransaction, 
     updateTransaction, 
     deleteTransaction 
@@ -52,7 +55,11 @@ function Transactions() {
     toAccountId: null,
     happenedAt: new Date(),
     note: '',
+    tags: [],
+    attachments: [],
   });
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredTransactions, setFilteredTransactions] = useState([]);
 
@@ -77,7 +84,11 @@ function Transactions() {
   const handleOpenDialog = (transaction = null) => {
     if (transaction) {
       setEditingTransaction(transaction);
-      setFormData(transaction);
+      setFormData({
+        ...transaction,
+        tags: transaction.tags || [],
+        attachments: transaction.attachments || [],
+      });
     } else {
       setEditingTransaction(null);
       setFormData({
@@ -88,8 +99,12 @@ function Transactions() {
         toAccountId: null,
         happenedAt: new Date(),
         note: '',
+        tags: [],
+        attachments: [],
       });
     }
+    setUploadProgress(0);
+    setUploadError(null);
     setOpenDialog(true);
   };
 
@@ -100,10 +115,13 @@ function Transactions() {
 
   const handleSubmit = async () => {
     try {
+      let transactionId;
       if (editingTransaction) {
         await updateTransaction(editingTransaction.id, formData);
+        transactionId = editingTransaction.id;
       } else {
-        await createTransaction(formData);
+        const newTransaction = await createTransaction(formData);
+        transactionId = newTransaction.id;
       }
       handleCloseDialog();
     } catch (error) {
@@ -127,6 +145,83 @@ function Transactions() {
       ...prev,
       [name]: type === 'number' ? parseFloat(value) : value,
     }));
+  };
+
+  const handleTagChange = (tagId) => {
+    setFormData(prev => {
+      const isSelected = prev.tags.some(tag => tag.id === tagId);
+      if (isSelected) {
+        return {
+          ...prev,
+          tags: prev.tags.filter(tag => tag.id !== tagId),
+        };
+      } else {
+        const tag = tags.find(t => t.id === tagId);
+        return {
+          ...prev,
+          tags: [...prev.tags, tag],
+        };
+      }
+    });
+  };
+
+  const handleFileUpload = async (e, transactionId) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploadProgress(0);
+    setUploadError(null);
+
+    const formData = new FormData();
+    formData.append('transaction_id', transactionId);
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('http://localhost:8080/api/v1/attachments/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('上传失败');
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        // 重新加载交易数据以获取最新的附件信息
+        setFormData(prev => ({
+          ...prev,
+          attachments: [...(prev.attachments || []), data.data],
+        }));
+      } else {
+        throw new Error(data.error || '上传失败');
+      }
+    } catch (error) {
+      setUploadError(error.message);
+    } finally {
+      setUploadProgress(0);
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId) => {
+    if (window.confirm('确定要删除这个附件吗？')) {
+      try {
+        const response = await fetch(`http://localhost:8080/api/v1/attachments/${attachmentId}`, {
+          method: 'DELETE',
+        });
+
+        if (response.ok) {
+          setFormData(prev => ({
+            ...prev,
+            attachments: prev.attachments.filter(att => att.id !== attachmentId),
+          }));
+        } else {
+          throw new Error('删除失败');
+        }
+      } catch (error) {
+        console.error('删除附件失败:', error);
+      }
+    }
   };
 
   const getCategoryName = (categoryId) => {
@@ -213,7 +308,48 @@ function Transactions() {
                       )}
                     </TableCell>
                     <TableCell>{format(new Date(transaction.happenedAt), 'yyyy-MM-dd HH:mm')}</TableCell>
-                    <TableCell>{transaction.note || '-'}</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Typography>{transaction.note || '-'}</Typography>
+                        {transaction.tags && transaction.tags.length > 0 && (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
+                            {transaction.tags.map((tag) => (
+                              <Chip 
+                                key={tag.id} 
+                                label={tag.name} 
+                                size="small" 
+                                sx={{ 
+                                  bgcolor: tag.color || 'primary.main',
+                                  color: 'white',
+                                  fontSize: '0.7rem',
+                                  height: 20
+                                }} 
+                              />
+                            ))}
+                          </Box>
+                        )}
+                        {transaction.attachments && transaction.attachments.length > 0 && (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
+                            {transaction.attachments.map((attachment) => (
+                              <Chip 
+                                key={attachment.id} 
+                                label={attachment.originalName} 
+                                size="small" 
+                                sx={{ 
+                                  bgcolor: 'primary.light',
+                                  color: 'primary.contrastText',
+                                  fontSize: '0.7rem',
+                                  height: 20
+                                }}
+                                onClick={() => {
+                                  window.open(`http://localhost:8080/uploads/${attachment.fileName}`, '_blank');
+                                }}
+                              />
+                            ))}
+                          </Box>
+                        )}
+                      </Box>
+                    </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 1 }}>
                         <IconButton onClick={() => handleOpenDialog(transaction)}>
@@ -341,6 +477,95 @@ function Transactions() {
                 value={formData.note}
                 onChange={handleChange}
               />
+
+              <FormControl fullWidth>
+                <InputLabel>标签</InputLabel>
+                <Select
+                  multiple
+                  name="tags"
+                  value={formData.tags.map(tag => tag.id)}
+                  onChange={(e) => {
+                    const selectedTagIds = e.target.value;
+                    const selectedTags = tags.filter(tag => selectedTagIds.includes(tag.id));
+                    setFormData(prev => ({ ...prev, tags: selectedTags }));
+                  }}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {selected.map((value) => {
+                        const tag = tags.find(t => t.id === value);
+                        return tag ? (
+                          <Chip key={value} label={tag.name} sx={{ bgcolor: tag.color || 'primary.main' }} />
+                        ) : null;
+                      })}
+                    </Box>
+                  )}
+                  label="标签"
+                >
+                  {tags.map((tag) => (
+                    <MenuItem key={tag.id} value={tag.id}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: tag.color || 'primary.main' }} />
+                        {tag.name}
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>附件</Typography>
+                {uploadError && (
+                  <Alert severity="error" sx={{ mb: 2 }}>
+                    {uploadError}
+                  </Alert>
+                )}
+                {uploadProgress > 0 && (
+                  <LinearProgress variant="determinate" value={uploadProgress} sx={{ mb: 2 }} />
+                )}
+                {formData.attachments && formData.attachments.length > 0 ? (
+                  <Box sx={{ mb: 2, maxHeight: 120, overflowY: 'auto' }}>
+                    {formData.attachments.map((attachment) => (
+                      <Box key={attachment.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {attachment.fileName.endsWith('.pdf') ? (
+                            <PictureAsPdf size={20} />
+                          ) : (
+                            <UploadFile size={20} />
+                          )}
+                          <Box>
+                            <Typography variant="body2">{attachment.originalName}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {((attachment.fileSize || 0) / 1024).toFixed(1)} KB
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <IconButton size="small" onClick={() => handleDeleteAttachment(attachment.id)}>
+                          <Cancel size={16} />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    暂无附件
+                  </Typography>
+                )}
+                {editingTransaction && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<UploadFile />}
+                    onClick={() => {
+                      const fileInput = document.createElement('input');
+                      fileInput.type = 'file';
+                      fileInput.accept = '*';
+                      fileInput.onchange = (e) => handleFileUpload(e, editingTransaction.id);
+                      fileInput.click();
+                    }}
+                  >
+                    上传附件
+                  </Button>
+                )}
+              </Box>
             </Box>
           </DialogContent>
           <DialogActions>

@@ -3,8 +3,12 @@ package api
 import (
 	"beecount-backend/models"
 	"beecount-backend/utils"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -119,7 +123,7 @@ func GetTransactionsByLedger(c *gin.Context) {
 		return
 	}
 	var transactions []models.Transaction
-	if err := utils.DB.Where("ledger_id = ?", id).Find(&transactions).Error; err != nil {
+	if err := utils.DB.Preload("Tags").Where("ledger_id = ?", id).Find(&transactions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
 		return
 	}
@@ -304,7 +308,7 @@ func DeleteCategory(c *gin.Context) {
 // GetTransactions 获取所有交易
 func GetTransactions(c *gin.Context) {
 	var transactions []models.Transaction
-	if err := utils.DB.Find(&transactions).Error; err != nil {
+	if err := utils.DB.Preload("Tags").Preload("Attachments").Find(&transactions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
 		return
 	}
@@ -318,7 +322,13 @@ func CreateTransaction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, Response{Success: false, Error: err.Error()})
 		return
 	}
+	// 先创建交易
 	if err := utils.DB.Create(&transaction).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	// 重新加载交易以获取完整信息
+	if err := utils.DB.Preload("Tags").First(&transaction, transaction.ID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
 		return
 	}
@@ -333,7 +343,7 @@ func GetTransaction(c *gin.Context) {
 		return
 	}
 	var transaction models.Transaction
-	if err := utils.DB.First(&transaction, id).Error; err != nil {
+	if err := utils.DB.Preload("Tags").Preload("Attachments").First(&transaction, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, Response{Success: false, Error: "交易不存在"})
 		return
 	}
@@ -357,7 +367,13 @@ func UpdateTransaction(c *gin.Context) {
 		return
 	}
 	transaction.ID = uint(id)
+	// 保存交易（包括标签关联）
 	if err := utils.DB.Save(&transaction).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	// 重新加载交易以获取完整信息
+	if err := utils.DB.Preload("Tags").First(&transaction, transaction.ID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
 		return
 	}
@@ -615,6 +631,157 @@ func DeleteBudget(c *gin.Context) {
 	c.JSON(http.StatusOK, Response{Success: true, Message: "预算删除成功"})
 }
 
+// GetBudgetProgress 获取预算使用进度
+func GetBudgetProgress(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "无效的预算ID"})
+		return
+	}
+
+	// 获取预算信息
+	var budget models.Budget
+	if err := utils.DB.First(&budget, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, Response{Success: false, Error: "预算不存在"})
+		return
+	}
+
+	// 计算当前周期的开始和结束日期
+	now := time.Now()
+	var startDate, endDate time.Time
+
+	switch budget.Period {
+	case "monthly":
+		// 月度预算：从 startDay 开始
+		startDate = time.Date(now.Year(), now.Month(), budget.StartDay, 0, 0, 0, 0, now.Location())
+		if now.Day() < budget.StartDay {
+			// 如果当前日期小于开始日，则取上个月的开始日
+			startDate = startDate.AddDate(0, -1, 0)
+		}
+		endDate = startDate.AddDate(0, 1, 0).Add(-time.Second)
+	case "weekly":
+		// 周度预算：从 startDay 开始（1=周一, 7=周日）
+		offset := (int(now.Weekday()) - budget.StartDay + 7) % 7
+		startDate = now.AddDate(0, 0, -offset)
+		startDate = time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location())
+		endDate = startDate.AddDate(0, 0, 7).Add(-time.Second)
+	case "yearly":
+		// 年度预算：从 startDay 开始
+		startDate = time.Date(now.Year(), 1, budget.StartDay, 0, 0, 0, 0, now.Location())
+		if now.Month() == 1 && now.Day() < budget.StartDay {
+			// 如果当前是1月且日期小于开始日，则取上一年的开始日
+			startDate = startDate.AddDate(-1, 0, 0)
+		}
+		endDate = startDate.AddDate(1, 0, 0).Add(-time.Second)
+	default:
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "无效的预算周期"})
+		return
+	}
+
+	// 构建查询条件
+	query := utils.DB.Model(&models.Transaction{}).Where("ledger_id = ? AND type = ? AND happened_at BETWEEN ? AND ?", budget.LedgerID, "expense", startDate, endDate)
+
+	// 如果是分类预算，添加分类过滤
+	if budget.Type == "category" && budget.CategoryID > 0 {
+		query = query.Where("category_id = ?", budget.CategoryID)
+	}
+
+	// 计算总支出
+	var totalExpense float64
+	query.Select("COALESCE(SUM(amount), 0) as total").Row().Scan(&totalExpense)
+
+	// 计算进度百分比
+	progress := 0.0
+	if budget.Amount > 0 {
+		progress = (totalExpense / budget.Amount) * 100
+		if progress > 100 {
+			progress = 100
+		}
+	}
+
+	// 构建响应
+	result := map[string]interface{}{
+		"budget":        budget,
+		"total_expense": totalExpense,
+		"progress":      progress,
+		"start_date":    startDate,
+		"end_date":      endDate,
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: result})
+}
+
+// GetAllBudgetsProgress 获取所有预算的使用进度
+func GetAllBudgetsProgress(c *gin.Context) {
+	// 获取所有预算
+	var budgets []models.Budget
+	if err := utils.DB.Find(&budgets).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	now := time.Now()
+	results := make([]map[string]interface{}, 0, len(budgets))
+
+	for _, budget := range budgets {
+		// 计算当前周期的开始和结束日期
+		var startDate, endDate time.Time
+
+		switch budget.Period {
+		case "monthly":
+			startDate = time.Date(now.Year(), now.Month(), budget.StartDay, 0, 0, 0, 0, now.Location())
+			if now.Day() < budget.StartDay {
+				startDate = startDate.AddDate(0, -1, 0)
+			}
+			endDate = startDate.AddDate(0, 1, 0).Add(-time.Second)
+		case "weekly":
+			offset := (int(now.Weekday()) - budget.StartDay + 7) % 7
+			startDate = now.AddDate(0, 0, -offset)
+			startDate = time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location())
+			endDate = startDate.AddDate(0, 0, 7).Add(-time.Second)
+		case "yearly":
+			startDate = time.Date(now.Year(), 1, budget.StartDay, 0, 0, 0, 0, now.Location())
+			if now.Month() == 1 && now.Day() < budget.StartDay {
+				startDate = startDate.AddDate(-1, 0, 0)
+			}
+			endDate = startDate.AddDate(1, 0, 0).Add(-time.Second)
+		default:
+			continue
+		}
+
+		// 构建查询条件
+		query := utils.DB.Model(&models.Transaction{}).Where("ledger_id = ? AND type = ? AND happened_at BETWEEN ? AND ?", budget.LedgerID, "expense", startDate, endDate)
+
+		// 如果是分类预算，添加分类过滤
+		if budget.Type == "category" && budget.CategoryID > 0 {
+			query = query.Where("category_id = ?", budget.CategoryID)
+		}
+
+		// 计算总支出
+		var totalExpense float64
+		query.Select("COALESCE(SUM(amount), 0) as total").Row().Scan(&totalExpense)
+
+		// 计算进度百分比
+		progress := 0.0
+		if budget.Amount > 0 {
+			progress = (totalExpense / budget.Amount) * 100
+			if progress > 100 {
+				progress = 100
+			}
+		}
+
+		results = append(results, map[string]interface{}{
+			"budget":        budget,
+			"total_expense": totalExpense,
+			"progress":      progress,
+			"start_date":    startDate,
+			"end_date":      endDate,
+		})
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: results})
+}
+
 // --- 附件相关处理函数 ---
 
 // GetAttachments 获取所有附件
@@ -625,6 +792,67 @@ func GetAttachments(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, Response{Success: true, Data: attachments})
+}
+
+// UploadAttachment 上传附件
+func UploadAttachment(c *gin.Context) {
+	// 获取交易ID
+	transactionID, err := strconv.ParseUint(c.PostForm("transaction_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "无效的交易ID"})
+		return
+	}
+
+	// 检查交易是否存在
+	var transaction models.Transaction
+	if err := utils.DB.First(&transaction, transactionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, Response{Success: false, Error: "交易不存在"})
+		return
+	}
+
+	// 获取上传的文件
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "文件上传失败"})
+		return
+	}
+	defer file.Close()
+
+	// 生成唯一文件名
+	fileName := fmt.Sprintf("%d_%s", time.Now().Unix(), header.Filename)
+	filePath := "uploads/" + fileName
+
+	// 保存文件
+	dst, err := os.Create(filePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: "文件保存失败"})
+		return
+	}
+	defer dst.Close()
+
+	// 复制文件内容
+	if _, err = io.Copy(dst, file); err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: "文件复制失败"})
+		return
+	}
+
+	// 创建附件记录
+	attachment := models.TransactionAttachment{
+		TransactionID: uint(transactionID),
+		FileName:      fileName,
+		OriginalName:  header.Filename,
+		FileSize:      int(header.Size),
+		CreatedAt:     time.Now(),
+	}
+
+	if err := utils.DB.Create(&attachment).Error; err != nil {
+		// 如果数据库操作失败，删除已上传的文件
+		os.Remove(filePath)
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, Response{Success: true, Data: attachment, Message: "附件上传成功"})
 }
 
 // CreateAttachment 创建新附件

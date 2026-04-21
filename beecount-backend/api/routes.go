@@ -86,6 +86,8 @@ func RegisterRoutes(r *gin.Engine) {
 		budgets.GET("/:id", GetBudget)
 		budgets.PUT("/:id", UpdateBudget)
 		budgets.DELETE("/:id", DeleteBudget)
+		budgets.GET("/:id/progress", GetBudgetProgress)
+		budgets.GET("/progress/all", GetAllBudgetsProgress)
 	}
 
 	// 附件相关路由
@@ -93,6 +95,7 @@ func RegisterRoutes(r *gin.Engine) {
 	{
 		attachments.GET("", GetAttachments)
 		attachments.POST("", CreateAttachment)
+		attachments.POST("/upload", UploadAttachment)
 		attachments.GET("/:id", GetAttachment)
 		attachments.DELETE("/:id", DeleteAttachment)
 	}

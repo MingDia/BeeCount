@@ -52,6 +52,9 @@ func main() {
 	// 注册API路由
 	api.RegisterRoutes(r)
 
+	// 静态文件服务 - 用于访问上传的附件
+	r.Static("/uploads", "./uploads")
+
 	// 启动服务器
 	serverAddr := fmt.Sprintf(":%s", cfg.ServerPort)
 	log.Printf("Server starting on %s", serverAddr)

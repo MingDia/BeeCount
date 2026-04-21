@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -24,7 +24,7 @@ import { Add, Delete, Edit } from '@mui/icons-material';
 import { useApp } from '../contexts/AppContext';
 
 function Budgets() {
-  const { budgets, categories, createBudget, updateBudget, deleteBudget, transactions } = useApp();
+  const { budgets, categories, createBudget, updateBudget, deleteBudget } = useApp();
   const [openDialog, setOpenDialog] = useState(false);
   const [editingBudget, setEditingBudget] = useState(null);
   const [formData, setFormData] = useState({
@@ -35,6 +35,8 @@ function Budgets() {
     startDay: 1,
     enabled: true,
   });
+  const [budgetsProgress, setBudgetsProgress] = useState({});
+  const [loading, setLoading] = useState(false);
 
   const handleOpenDialog = (budget = null) => {
     if (budget) {
@@ -90,26 +92,38 @@ function Budgets() {
     }));
   };
 
+  // 获取预算进度数据
+  const fetchBudgetsProgress = async () => {
+    if (budgets.length === 0) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:8080/api/v1/budgets/progress/all');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          const progressMap = {};
+          data.data.forEach(item => {
+            progressMap[item.budget.id] = item;
+          });
+          setBudgetsProgress(progressMap);
+        }
+      }
+    } catch (error) {
+      console.error('获取预算进度失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 当预算变化时重新获取进度
+  useEffect(() => {
+    fetchBudgetsProgress();
+  }, [budgets]);
+
   const getCategoryName = (categoryId) => {
     const category = categories.find(c => c.id === categoryId);
     return category ? category.name : '总预算';
-  };
-
-  const calculateSpent = (budgetId) => {
-    // 简单计算：获取当前预算对应的支出
-    const budget = budgets.find(b => b.id === budgetId);
-    if (!budget) return 0;
-
-    if (budget.type === 'total') {
-      return transactions
-        .filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + t.amount, 0);
-    } else if (budget.type === 'category' && budget.categoryId) {
-      return transactions
-        .filter(t => t.type === 'expense' && t.categoryId === budget.categoryId)
-        .reduce((sum, t) => sum + t.amount, 0);
-    }
-    return 0;
   };
 
   return (
@@ -127,8 +141,11 @@ function Budgets() {
 
       <Grid container spacing={3}>
         {budgets.map((budget) => {
-          const spent = calculateSpent(budget.id);
-          const progress = Math.min((spent / budget.amount) * 100, 100);
+          const budgetProgress = budgetsProgress[budget.id];
+          const spent = budgetProgress?.total_expense || 0;
+          const progress = budgetProgress?.progress || 0;
+          const startDate = budgetProgress?.start_date ? new Date(budgetProgress.start_date) : null;
+          const endDate = budgetProgress?.end_date ? new Date(budgetProgress.end_date) : null;
           
           return (
             <Grid item xs={12} sm={6} md={4} key={budget.id}>
@@ -153,6 +170,11 @@ function Budgets() {
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     开始日: {budget.startDay} 日
                   </Typography>
+                  {startDate && endDate && (
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      周期: {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
+                    </Typography>
+                  )}
                   <Box sx={{ mb: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                       <Typography variant="body2">已使用</Typography>

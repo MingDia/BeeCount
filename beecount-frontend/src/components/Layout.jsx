@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -14,6 +14,10 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem as SelectMenuItem,
 } from '@mui/material';
 import {
   Home,
@@ -24,7 +28,9 @@ import {
   Label,
   Menu as MenuIcon,
   AccountCircle,
+  AccountBalance,
 } from '@mui/icons-material';
+import { useApp } from '../contexts/AppContext';
 
 const drawerWidth = 240;
 
@@ -41,6 +47,7 @@ function Layout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [anchorEl, setAnchorEl] = React.useState(null);
+  const { ledgers, selectedLedger, dispatch } = useApp();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -54,6 +61,14 @@ function Layout() {
     setAnchorEl(null);
   };
 
+  const handleLedgerChange = (event) => {
+    const selectedId = parseInt(event.target.value);
+    const ledger = ledgers.find(l => l.id === selectedId);
+    if (ledger) {
+      dispatch({ type: 'SET_SELECTED_LEDGER', payload: ledger });
+    }
+  };
+
   const drawer = (
     <div>
       <Toolbar>
@@ -61,6 +76,28 @@ function Layout() {
           BeeCount
         </Typography>
       </Toolbar>
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <AccountBalance size={16} sx={{ mr: 1 }} />
+          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+            账本
+          </Typography>
+        </Box>
+        <FormControl fullWidth size="small">
+          <Select
+            value={selectedLedger?.id || ''}
+            onChange={handleLedgerChange}
+            displayEmpty
+            inputProps={{ 'aria-label': '选择账本' }}
+          >
+            {ledgers.map((ledger) => (
+              <SelectMenuItem key={ledger.id} value={ledger.id}>
+                {ledger.name}
+              </SelectMenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
       <Divider />
       <List>
         {menuItems.map((item) => (
