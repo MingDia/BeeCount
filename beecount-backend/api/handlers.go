@@ -3,11 +3,13 @@ package api
 import (
 	"beecount-backend/models"
 	"beecount-backend/utils"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -896,4 +898,419 @@ func DeleteAttachment(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, Response{Success: true, Message: "附件删除成功"})
+}
+
+// --- 数据导入/导出相关处理函数 --- 
+
+// ExportTransactionsCSV 导出交易为CSV
+func ExportTransactionsCSV(c *gin.Context) {
+	var transactions []models.Transaction
+	if err := utils.DB.Preload("Tags").Preload("Attachments").Find(&transactions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	// 设置响应头
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", "attachment; filename=transactions.csv")
+
+	// 写入CSV头
+	c.Writer.WriteString("ID,Type,Amount,CategoryID,AccountID,ToAccountID,HappenedAt,Note,Tags\n")
+
+	// 写入交易数据
+	for _, t := range transactions {
+		tags := ""
+		for i, tag := range t.Tags {
+			if i > 0 {
+				tags += ","
+			}
+			tags += tag.Name
+		}
+		c.Writer.WriteString(fmt.Sprintf("%d,%s,%.2f,%d,%d,%d,%s,%s,%s\n",
+			t.ID, t.Type, t.Amount, t.CategoryID, t.AccountID, t.ToAccountID, t.HappenedAt, t.Note, tags))
+	}
+}
+
+// ExportAccountsCSV 导出账户为CSV
+func ExportAccountsCSV(c *gin.Context) {
+	var accounts []models.Account
+	if err := utils.DB.Find(&accounts).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	// 设置响应头
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", "attachment; filename=accounts.csv")
+
+	// 写入CSV头
+	c.Writer.WriteString("ID,LedgerID,Name,Type,Currency,InitialBalance,Note\n")
+
+	// 写入账户数据
+	for _, a := range accounts {
+		c.Writer.WriteString(fmt.Sprintf("%d,%d,%s,%s,%s,%.2f,%s\n",
+			a.ID, a.LedgerID, a.Name, a.Type, a.Currency, a.InitialBalance, a.Note))
+	}
+}
+
+// ExportCategoriesCSV 导出分类为CSV
+func ExportCategoriesCSV(c *gin.Context) {
+	var categories []models.Category
+	if err := utils.DB.Find(&categories).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	// 设置响应头
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", "attachment; filename=categories.csv")
+
+	// 写入CSV头
+	c.Writer.WriteString("ID,Name,Kind,Icon,ParentID,Level\n")
+
+	// 写入分类数据
+	for _, c := range categories {
+		c.Writer.WriteString(fmt.Sprintf("%d,%s,%s,%s,%d,%d\n",
+			c.ID, c.Name, c.Kind, c.Icon, c.ParentID, c.Level))
+	}
+}
+
+// ImportTransactionsCSV 导入交易CSV
+func ImportTransactionsCSV(c *gin.Context) {
+	// 处理CSV文件上传
+	file, _, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "文件上传失败"})
+		return
+	}
+	defer file.Close()
+
+	// 解析CSV
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "CSV解析失败"})
+		return
+	}
+
+	// 跳过表头
+	for i, record := range records {
+		if i == 0 {
+			continue
+		}
+
+		// 解析记录
+		id, _ := strconv.ParseUint(record[0], 10, 32)
+		amount, _ := strconv.ParseFloat(record[2], 64)
+		categoryID, _ := strconv.ParseUint(record[3], 10, 32)
+		accountID, _ := strconv.ParseUint(record[4], 10, 32)
+		toAccountID, _ := strconv.ParseUint(record[5], 10, 32)
+		happenedAt, _ := time.Parse(time.RFC3339, record[6])
+
+		// 创建交易
+		transaction := models.Transaction{
+			ID:          uint(id),
+			Type:        record[1],
+			Amount:      amount,
+			CategoryID:  uint(categoryID),
+			AccountID:   uint(accountID),
+			ToAccountID: uint(toAccountID),
+			HappenedAt:  happenedAt,
+			Note:        record[7],
+		}
+
+		// 处理标签
+		tags := strings.Split(record[8], ",")
+		for _, tagName := range tags {
+			if tagName != "" {
+				var tag models.Tag
+				if err := utils.DB.Where("name = ?", tagName).First(&tag).Error; err != nil {
+					// 创建新标签
+					tag = models.Tag{
+						Name: tagName,
+					}
+					utils.DB.Create(&tag)
+				}
+				transaction.Tags = append(transaction.Tags, tag)
+			}
+		}
+
+		// 保存交易
+		if err := utils.DB.Create(&transaction).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Message: "交易导入成功"})
+}
+
+// ImportAccountsCSV 导入账户CSV
+func ImportAccountsCSV(c *gin.Context) {
+	// 处理CSV文件上传
+	file, _, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "文件上传失败"})
+		return
+	}
+	defer file.Close()
+
+	// 解析CSV
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "CSV解析失败"})
+		return
+	}
+
+	// 跳过表头
+	for i, record := range records {
+		if i == 0 {
+			continue
+		}
+
+		// 解析记录
+		id, _ := strconv.ParseUint(record[0], 10, 32)
+		ledgerID, _ := strconv.ParseUint(record[1], 10, 32)
+		initialBalance, _ := strconv.ParseFloat(record[5], 64)
+
+		// 创建账户
+		account := models.Account{
+			ID:             uint(id),
+			LedgerID:       uint(ledgerID),
+			Name:           record[2],
+			Type:           record[3],
+			Currency:       record[4],
+			InitialBalance: initialBalance,
+			Note:           record[6],
+		}
+
+		// 保存账户
+		if err := utils.DB.Create(&account).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Message: "账户导入成功"})
+}
+
+// ImportCategoriesCSV 导入分类CSV
+func ImportCategoriesCSV(c *gin.Context) {
+	// 处理CSV文件上传
+	file, _, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "文件上传失败"})
+		return
+	}
+	defer file.Close()
+
+	// 解析CSV
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "CSV解析失败"})
+		return
+	}
+
+	// 跳过表头
+	for i, record := range records {
+		if i == 0 {
+			continue
+		}
+
+		// 解析记录
+		id, _ := strconv.ParseUint(record[0], 10, 32)
+		parentID, _ := strconv.ParseUint(record[4], 10, 32)
+		level, _ := strconv.Atoi(record[5])
+
+		// 创建分类
+		category := models.Category{
+			ID:       uint(id),
+			Name:     record[1],
+			Kind:     record[2],
+			Icon:     record[3],
+			ParentID: uint(parentID),
+			Level:    level,
+		}
+
+		// 保存分类
+		if err := utils.DB.Create(&category).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Message: "分类导入成功"})
+}
+
+// GenerateRecurringTransactions 生成周期交易
+func GenerateRecurringTransactions(c *gin.Context) {
+	// 获取所有启用的周期交易
+	var recurringTransactions []models.RecurringTransaction
+	if err := utils.DB.Where("enabled = ?", true).Find(&recurringTransactions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	now := time.Now()
+	generatedCount := 0
+
+	// 遍历每个周期交易
+	for _, rt := range recurringTransactions {
+		// 计算下一个应该生成交易的日期
+		nextDate := rt.LastGeneratedDate
+		if nextDate.IsZero() {
+			nextDate = rt.StartDate
+		}
+
+		// 根据频率计算下一个日期
+		for nextDate.Before(now) || nextDate.Equal(now) {
+			// 检查是否超过结束日期
+			if !rt.EndDate.IsZero() && nextDate.After(rt.EndDate) {
+				break
+			}
+
+			// 生成交易
+			transaction := models.Transaction{
+				LedgerID:      rt.LedgerID,
+				Type:          rt.Type,
+				Amount:        rt.Amount,
+				CategoryID:    rt.CategoryID,
+				AccountID:     rt.AccountID,
+				ToAccountID:   rt.ToAccountID,
+				HappenedAt:    nextDate,
+				Note:          rt.Note,
+				RecurringID:   rt.ID,
+			}
+
+			// 保存交易
+			if err := utils.DB.Create(&transaction).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+				return
+			}
+
+			generatedCount++
+
+			// 计算下一个日期
+			switch rt.Frequency {
+			case "daily":
+				nextDate = nextDate.AddDate(0, 0, rt.Interval)
+			case "weekly":
+				nextDate = nextDate.AddDate(0, 0, rt.Interval*7)
+			case "monthly":
+				nextDate = nextDate.AddDate(0, rt.Interval, 0)
+			case "yearly":
+				nextDate = nextDate.AddDate(rt.Interval, 0, 0)
+			}
+		}
+
+		// 更新最后生成日期
+		rt.LastGeneratedDate = now
+		if err := utils.DB.Save(&rt).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Message: fmt.Sprintf("成功生成 %d 笔周期交易", generatedCount), Data: map[string]int{"generated_count": generatedCount}})
+}
+
+// --- AI相关处理函数 --- 
+
+// AIChat AI对话
+func AIChat(c *gin.Context) {
+	type ChatRequest struct {
+		Message string `json:"message"`
+		Context []string `json:"context"`
+	}
+
+	var req ChatRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	// 这里应该调用OpenAI API
+	// 为了演示，返回模拟数据
+	response := map[string]interface{}{
+		"response": "我是你的记账助手，有什么可以帮你的吗？",
+		"suggestions": ["查看本月支出", "设置预算提醒", "分析消费习惯"]
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: response})
+}
+
+// AnalyzeTransaction 分析交易
+func AnalyzeTransaction(c *gin.Context) {
+	type AnalyzeRequest struct {
+		TransactionID uint `json:"transaction_id"`
+	}
+
+	var req AnalyzeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	// 获取交易信息
+	var transaction models.Transaction
+	if err := utils.DB.First(&transaction, req.TransactionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, Response{Success: false, Error: "交易不存在"})
+		return
+	}
+
+	// 这里应该调用OpenAI API分析交易
+	// 为了演示，返回模拟数据
+	analysis := map[string]interface{}{
+		"transaction": transaction,
+		"analysis": "这笔交易属于日常消费，金额在合理范围内",
+		"suggestions": ["可以考虑设置该分类的预算", "建议定期查看此类消费趋势"]
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: analysis})
+}
+
+// SuggestBudget 预算建议
+func SuggestBudget(c *gin.Context) {
+	type BudgetRequest struct {
+		LedgerID uint `json:"ledger_id"`
+	}
+
+	var req BudgetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	// 获取账本的交易数据
+	var transactions []models.Transaction
+	if err := utils.DB.Where("ledger_id = ?", req.LedgerID).Find(&transactions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	// 计算总支出
+	totalExpense := 0.0
+	for _, t := range transactions {
+		if t.Type == "expense" {
+			totalExpense += t.Amount
+		}
+	}
+
+	// 这里应该调用OpenAI API生成预算建议
+	// 为了演示，返回模拟数据
+	suggestion := map[string]interface{}{
+		"total_expense": totalExpense,
+		"suggested_budget": totalExpense * 0.9, // 建议预算为总支出的90%
+		"category_suggestions": [
+			{"category": "餐饮", "suggested_budget": totalExpense * 0.3},
+			{"category": "交通", "suggested_budget": totalExpense * 0.15},
+			{"category": "购物", "suggested_budget": totalExpense * 0.2},
+			{"category": "娱乐", "suggested_budget": totalExpense * 0.1},
+			{"category": "其他", "suggested_budget": totalExpense * 0.25}
+		]
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: suggestion})
 }

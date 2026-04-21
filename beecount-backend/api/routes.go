@@ -99,4 +99,33 @@ func RegisterRoutes(r *gin.Engine) {
 		attachments.GET("/:id", GetAttachment)
 		attachments.DELETE("/:id", DeleteAttachment)
 	}
+
+	// 数据导入/导出路由
+	export := api.Group("/export")
+	{
+		export.GET("/csv/transactions", ExportTransactionsCSV)
+		export.GET("/csv/accounts", ExportAccountsCSV)
+		export.GET("/csv/categories", ExportCategoriesCSV)
+	}
+
+	import := api.Group("/import")
+	{
+		import.POST("/csv/transactions", ImportTransactionsCSV)
+		import.POST("/csv/accounts", ImportAccountsCSV)
+		import.POST("/csv/categories", ImportCategoriesCSV)
+	}
+
+	// 周期交易相关路由
+	recurring := api.Group("/recurring")
+	{
+		recurring.POST("/generate", GenerateRecurringTransactions)
+	}
+
+	// AI相关路由
+	ai := api.Group("/ai")
+	{
+		ai.POST("/chat", AIChat)
+		ai.POST("/analyze-transaction", AnalyzeTransaction)
+		ai.POST("/suggest-budget", SuggestBudget)
+	}
 }

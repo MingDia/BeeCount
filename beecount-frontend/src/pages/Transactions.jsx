@@ -124,8 +124,10 @@ function Transactions() {
         transactionId = newTransaction.id;
       }
       handleCloseDialog();
+      return transactionId;
     } catch (error) {
       console.error('操作失败:', error);
+      return null;
     }
   };
 
@@ -550,21 +552,58 @@ function Transactions() {
                     暂无附件
                   </Typography>
                 )}
-                {editingTransaction && (
-                  <Button
-                    variant="outlined"
-                    startIcon={<UploadFile />}
-                    onClick={() => {
-                      const fileInput = document.createElement('input');
-                      fileInput.type = 'file';
-                      fileInput.accept = '*';
-                      fileInput.onchange = (e) => handleFileUpload(e, editingTransaction.id);
-                      fileInput.click();
-                    }}
-                  >
-                    上传附件
-                  </Button>
-                )}
+                <Button
+                  variant="outlined"
+                  startIcon={<UploadFile />}
+                  onClick={() => {
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = '*';
+                    fileInput.onchange = (e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      
+                      if (editingTransaction) {
+                        handleFileUpload(e, editingTransaction.id);
+                      } else {
+                        // 对于新交易，先创建交易，然后上传附件
+                        handleSubmit().then((transactionId) => {
+                          if (transactionId) {
+                            const formData = new FormData();
+                            formData.append('transaction_id', transactionId);
+                            formData.append('file', file);
+                            
+                            setUploadProgress(0);
+                            setUploadError(null);
+                            
+                            fetch('http://localhost:8080/api/v1/attachments/upload', {
+                              method: 'POST',
+                              body: formData,
+                            })
+                              .then(response => response.json())
+                              .then(data => {
+                                if (data.success) {
+                                  // 上传成功，重新加载数据
+                                  window.location.reload();
+                                } else {
+                                  setUploadError(data.error || '上传失败');
+                                }
+                              })
+                              .catch(error => {
+                                setUploadError('上传失败: ' + error.message);
+                              })
+                              .finally(() => {
+                                setUploadProgress(0);
+                              });
+                          }
+                        });
+                      }
+                    };
+                    fileInput.click();
+                  }}
+                >
+                  上传附件
+                </Button>
               </Box>
             </Box>
           </DialogContent>

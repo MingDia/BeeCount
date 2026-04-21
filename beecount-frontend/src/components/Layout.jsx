@@ -29,6 +29,8 @@ import {
   Menu as MenuIcon,
   AccountCircle,
   AccountBalance,
+  FileDownload,
+  BrainCircuit,
 } from '@mui/icons-material';
 import { useApp } from '../contexts/AppContext';
 
@@ -41,6 +43,8 @@ const menuItems = [
   { text: '交易', icon: <Receipt />, path: '/transactions' },
   { text: '预算', icon: <Budget />, path: '/budgets' },
   { text: '标签', icon: <Label />, path: '/tags' },
+  { text: '数据导入/导出', icon: <FileDownload />, path: '/data' },
+  { text: 'AI助手', icon: <BrainCircuit />, path: '/ai' },
 ];
 
 function Layout() {
