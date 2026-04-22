@@ -6,6 +6,34 @@ import (
 	"gorm.io/gorm"
 )
 
+// User 用户模型
+type User struct {
+	ID           uint           `json:"id" gorm:"primaryKey"`
+	Username     string         `json:"username" gorm:"unique;not null"`
+	Email        string         `json:"email" gorm:"unique;not null"`
+	PasswordHash string         `json:"-" gorm:"not null"` // 不返回密码
+	Nickname     string         `json:"nickname" gorm:"default:null"`
+	Avatar       string         `json:"avatar" gorm:"default:null"`
+	Theme        string         `json:"theme" gorm:"default:light"`
+	Language     string         `json:"language" gorm:"default:zh-CN"`
+	FontScale    float64        `json:"font_scale" gorm:"default:1.0"`
+	CreatedAt    time.Time      `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt    time.Time      `json:"updated_at" gorm:"default:CURRENT_TIMESTAMP"`
+	Ledgers      []Ledger       `json:"ledgers,omitempty" gorm:"many2many:user_ledgers;"`
+	Reminders    []Reminder     `json:"reminders,omitempty" gorm:"foreignKey:UserID"`
+	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+// UserLedger 用户-账本关联模型
+type UserLedger struct {
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	UserID    uint           `json:"user_id" gorm:"index"`
+	LedgerID  uint           `json:"ledger_id" gorm:"index"`
+	Role      string         `json:"role" gorm:"default:owner"` // owner / editor / viewer
+	CreatedAt time.Time      `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
 // Ledger 账本模型
 type Ledger struct {
 	ID        uint           `json:"id" gorm:"primaryKey"`
@@ -15,6 +43,7 @@ type Ledger struct {
 	CreatedAt time.Time      `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
 	SyncID    string         `json:"sync_id" gorm:"index"`
 	Accounts  []Account      `json:"accounts,omitempty" gorm:"foreignKey:LedgerID"`
+	Users     []User         `json:"users,omitempty" gorm:"many2many:user_ledgers;"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
@@ -147,4 +176,37 @@ type TransactionAttachment struct {
 	CloudSha256    string         `json:"cloud_sha256" gorm:"default:null"`
 	CreatedAt      time.Time      `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
 	DeletedAt      gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+// Reminder 提醒模型
+type Reminder struct {
+	ID             uint           `json:"id" gorm:"primaryKey"`
+	UserID         uint           `json:"user_id" gorm:"index"`
+	LedgerID       uint           `json:"ledger_id" gorm:"default:null"`
+	Type           string         `json:"type" gorm:"not null"` // budget-预算提醒, recurring-周期交易提醒, bill-账单提醒, custom-自定义提醒
+	Title          string         `json:"title" gorm:"not null"`
+	Description    string         `json:"description" gorm:"default:null"`
+	Amount         float64        `json:"amount" gorm:"default:null"`
+	ReminderDate   time.Time      `json:"reminder_date" gorm:"not null"`
+	Frequency      string         `json:"frequency" gorm:"default:once"` // once-一次性, daily-每日, weekly-每周, monthly-每月
+	Enabled        bool           `json:"enabled" gorm:"default:true"`
+	NotifiedAt     time.Time      `json:"notified_at" gorm:"default:null"`
+	CreatedAt      time.Time      `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt      time.Time      `json:"updated_at" gorm:"default:CURRENT_TIMESTAMP"`
+	DeletedAt      gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+// TransactionPattern 交易模式模型（用于智能分类）
+type TransactionPattern struct {
+	ID            uint           `json:"id" gorm:"primaryKey"`
+	UserID        uint           `json:"user_id" gorm:"index"`
+	NotePattern   string         `json:"note_pattern" gorm:"not null"` // 备注模式（关键词）
+	CategoryID    uint           `json:"category_id" gorm:"not null"`
+	Type          string         `json:"type" gorm:"not null"` // expense / income
+	AccountID     uint           `json:"account_id" gorm:"default:null"`
+	Confidence    float64        `json:"confidence" gorm:"default:0.8"`
+	UsageCount    int            `json:"usage_count" gorm:"default:0"`
+	CreatedAt     time.Time      `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt     time.Time      `json:"updated_at" gorm:"default:CURRENT_TIMESTAMP"`
+	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
 }

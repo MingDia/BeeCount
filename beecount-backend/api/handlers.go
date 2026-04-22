@@ -3,9 +3,12 @@ package api
 import (
 	"beecount-backend/models"
 	"beecount-backend/utils"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -13,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // 通用响应结构
@@ -1464,4 +1468,434 @@ func GetStatistics(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, Response{Success: true, Data: result})
+}
+
+// ==================== 用户认证相关API ====================
+
+var jwtSecret = []byte("beecount-secret-key-change-in-production")
+
+func hashPassword(password string) string {
+	h := sha256.New()
+	h.Write([]byte(password))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func generateToken(userID uint, username string) (string, error) {
+	claims := jwt.MapClaims{
+		"user_id":  userID,
+		"username": username,
+		"exp":      time.Now().Add(time.Hour * 720).Unix(),
+		"iat":      time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
+}
+
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, Response{Success: false, Error: "Authorization header required"})
+			c.Abort()
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
+			return jwtSecret, nil
+		})
+
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusUnauthorized, Response{Success: false, Error: "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, Response{Success: false, Error: "Invalid token claims"})
+			c.Abort()
+			return
+		}
+
+		c.Set("user_id", uint(claims["user_id"].(float64)))
+		c.Set("username", claims["username"])
+		c.Next()
+	}
+}
+
+// Register 用户注册
+func Register(c *gin.Context) {
+	var req struct {
+		Username string `json:"username" binding:"required"`
+		Email    string `json:"email" binding:"required,email"`
+		Password string `json:"password" binding:"required,min=6"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	var existingUser models.User
+	if err := utils.DB.Where("username = ? OR email = ?", req.Username, req.Email).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusConflict, Response{Success: false, Error: "Username or email already exists"})
+		return
+	}
+
+	user := models.User{
+		Username:     req.Username,
+		Email:        req.Email,
+		PasswordHash: hashPassword(req.Password),
+		Nickname:     req.Username,
+		Theme:        "light",
+		Language:     "zh-CN",
+	}
+
+	if err := utils.DB.Create(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: "Failed to create user"})
+		return
+	}
+
+	// 创建默认账本
+	defaultLedger := models.Ledger{
+		Name:     "我的账本",
+		Currency: "CNY",
+		Type:     "personal",
+	}
+	if err := utils.DB.Create(&defaultLedger).Error; err == nil {
+		utils.DB.Create(&models.UserLedger{
+			UserID:   user.ID,
+			LedgerID: defaultLedger.ID,
+			Role:     "owner",
+		})
+	}
+
+	token, _ := generateToken(user.ID, user.Username)
+	c.JSON(http.StatusCreated, Response{
+		Success: true,
+		Data: map[string]interface{}{
+			"user":  user,
+			"token": token,
+		},
+		Message: "Registration successful",
+	})
+}
+
+// Login 用户登录
+func Login(c *gin.Context) {
+	var req struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	var user models.User
+	if err := utils.DB.Where("username = ?", req.Username).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, Response{Success: false, Error: "Invalid credentials"})
+		return
+	}
+
+	if user.PasswordHash != hashPassword(req.Password) {
+		c.JSON(http.StatusUnauthorized, Response{Success: false, Error: "Invalid credentials"})
+		return
+	}
+
+	token, _ := generateToken(user.ID, user.Username)
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Data: map[string]interface{}{
+			"user":  user,
+			"token": token,
+		},
+		Message: "Login successful",
+	})
+}
+
+// GetCurrentUser 获取当前用户信息
+func GetCurrentUser(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	var user models.User
+	if err := utils.DB.Preload("Ledgers").First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, Response{Success: false, Error: "User not found"})
+		return
+	}
+	c.JSON(http.StatusOK, Response{Success: true, Data: user})
+}
+
+// UpdateCurrentUser 更新当前用户信息
+func UpdateCurrentUser(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	var user models.User
+	if err := utils.DB.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, Response{Success: false, Error: "User not found"})
+		return
+	}
+
+	var updateData map[string]interface{}
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	delete(updateData, "password_hash")
+	delete(updateData, "id")
+	delete(updateData, "created_at")
+
+	if err := utils.DB.Model(&user).Updates(updateData).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: "Failed to update user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: user, Message: "User updated successfully"})
+}
+
+// ==================== 提醒系统相关API ====================
+
+// GetReminders 获取提醒列表
+func GetReminders(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	var reminders []models.Reminder
+	if err := utils.DB.Where("user_id = ?", userID).Find(&reminders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, Response{Success: true, Data: reminders})
+}
+
+// CreateReminder 创建提醒
+func CreateReminder(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	var reminder models.Reminder
+	if err := c.ShouldBindJSON(&reminder); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: err.Error()})
+		return
+	}
+	reminder.UserID = userID.(uint)
+	if err := utils.DB.Create(&reminder).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, Response{Success: true, Data: reminder, Message: "Reminder created successfully"})
+}
+
+// UpdateReminder 更新提醒
+func UpdateReminder(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid reminder ID"})
+		return
+	}
+
+	var reminder models.Reminder
+	if err := utils.DB.Where("id = ? AND user_id = ?", id, userID).First(&reminder).Error; err != nil {
+		c.JSON(http.StatusNotFound, Response{Success: false, Error: "Reminder not found"})
+		return
+	}
+
+	if err := c.ShouldBindJSON(&reminder); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	if err := utils.DB.Save(&reminder).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: reminder, Message: "Reminder updated successfully"})
+}
+
+// DeleteReminder 删除提醒
+func DeleteReminder(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid reminder ID"})
+		return
+	}
+
+	if err := utils.DB.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Reminder{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Message: "Reminder deleted successfully"})
+}
+
+// GetPendingReminders 获取待处理的提醒
+func GetPendingReminders(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	now := time.Now()
+	var reminders []models.Reminder
+	if err := utils.DB.Where("user_id = ? AND enabled = ? AND reminder_date <= ? AND (notified_at IS NULL OR notified_at < reminder_date)", userID, true, now).Find(&reminders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, Response{Success: true, Data: reminders})
+}
+
+// MarkReminderNotified 标记提醒已通知
+func MarkReminderNotified(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid reminder ID"})
+		return
+	}
+
+	if err := utils.DB.Model(&models.Reminder{}).Where("id = ? AND user_id = ?", id, userID).Update("notified_at", time.Now()).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Message: "Reminder marked as notified"})
+}
+
+// ==================== 智能记账相关API ====================
+
+// SmartClassify 智能分类交易
+func SmartClassify(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	var req struct {
+		Note      string `json:"note"`
+		Type      string `json:"type" binding:"required"` // expense / income
+		Amount    float64 `json:"amount"`
+		AccountID uint `json:"account_id"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	var patterns []models.TransactionPattern
+	if err := utils.DB.Where("user_id = ? AND type = ?", userID, req.Type).Order("usage_count DESC, confidence DESC").Find(&patterns).Error; err == nil {
+		for _, pattern := range patterns {
+			if strings.Contains(strings.ToLower(req.Note), strings.ToLower(pattern.NotePattern)) {
+				var category models.Category
+				utils.DB.First(&category, pattern.CategoryID)
+				
+				c.JSON(http.StatusOK, Response{
+					Success: true,
+					Data: map[string]interface{}{
+						"category":   category,
+						"confidence": pattern.Confidence,
+						"pattern":    pattern,
+					},
+					Message: "Classification successful",
+				})
+				return
+			}
+		}
+	}
+
+	var categories []models.Category
+	utils.DB.Where("kind = ? AND level = 1", req.Type).Find(&categories)
+	if len(categories) > 0 {
+		c.JSON(http.StatusOK, Response{
+			Success: true,
+			Data: map[string]interface{}{
+				"category":   categories[0],
+				"confidence": 0.5,
+				"message":    "Using default category",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Success: false, Error: "Unable to classify"})
+}
+
+// LearnFromTransaction 从交易中学习
+func LearnFromTransaction(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	var req struct {
+		TransactionID uint `json:"transaction_id" binding:"required"`
+		CategoryID    uint `json:"category_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	var transaction models.Transaction
+	if err := utils.DB.First(&transaction, req.TransactionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, Response{Success: false, Error: "Transaction not found"})
+		return
+	}
+
+	note := transaction.Note
+	if note == "" {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Transaction has no note to learn from"})
+		return
+	}
+
+	keywords := strings.Fields(note)
+	for _, keyword := range keywords {
+		if len(keyword) >= 2 {
+			var existingPattern models.TransactionPattern
+			err := utils.DB.Where("user_id = ? AND type = ? AND note_pattern = ?", userID, transaction.Type, keyword).First(&existingPattern).Error
+			
+			if err == nil {
+				existingPattern.UsageCount++
+				existingPattern.Confidence = 0.8 + float64(existingPattern.UsageCount)*0.02
+				if existingPattern.Confidence > 1.0 {
+					existingPattern.Confidence = 1.0
+				}
+				utils.DB.Save(&existingPattern)
+			} else {
+				newPattern := models.TransactionPattern{
+					UserID:      userID.(uint),
+					NotePattern: keyword,
+					CategoryID:  req.CategoryID,
+					Type:        transaction.Type,
+					AccountID:   transaction.AccountID,
+					Confidence:  0.8,
+					UsageCount:  1,
+				}
+				utils.DB.Create(&newPattern)
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Message: "Learned from transaction successfully"})
+}
+
+// GetTransactionPatterns 获取交易模式列表
+func GetTransactionPatterns(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	var patterns []models.TransactionPattern
+	if err := utils.DB.Where("user_id = ?", userID).Order("usage_count DESC").Find(&patterns).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, Response{Success: true, Data: patterns})
+}
+
+// DeleteTransactionPattern 删除交易模式
+func DeleteTransactionPattern(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid pattern ID"})
+		return
+	}
+
+	if err := utils.DB.Where("id = ? AND user_id = ?", id, userID).Delete(&models.TransactionPattern{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Message: "Pattern deleted successfully"})
 }

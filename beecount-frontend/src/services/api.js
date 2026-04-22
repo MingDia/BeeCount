@@ -92,9 +92,48 @@ export const attachmentAPI = {
   delete: (id) => api.delete(`/attachments/${id}`),
 };
 
-// 统计分析 API
+// 统计分析API
 export const statisticsAPI = {
-  getStatistics: (params) => api.get('/statistics', { params }),
+	getStatistics: (params) => api.get("/statistics", { params }),
+};
+
+// 用户认证API
+export const authAPI = {
+	register: (data) => api.post("/auth/register", data),
+	login: (data) => api.post("/auth/login", data),
+};
+
+// 用户API
+export const userAPI = {
+	getMe: () => api.get("/user/me"),
+	updateMe: (data) => api.put("/user/me", data),
+};
+
+// 提醒系统API
+export const reminderAPI = {
+	getAll: () => api.get("/reminders"),
+	getPending: () => api.get("/reminders/pending"),
+	create: (data) => api.post("/reminders", data),
+	update: (id, data) => api.put(`/reminders/${id}`, data),
+	delete: (id) => api.delete(`/reminders/${id}`),
+	markNotified: (id) => api.put(`/reminders/${id}/mark-notified`),
+};
+
+// 智能记账API
+export const smartAPI = {
+	classify: (data) => api.post("/smart/classify", data),
+	learn: (data) => api.post("/smart/learn", data),
+	getPatterns: () => api.get("/smart/patterns"),
+	deletePattern: (id) => api.delete(`/smart/patterns/${id}`),
+};
+
+// 工具函数：设置认证token
+export const setAuthToken = (token) => {
+	if (token) {
+		api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+	} else {
+		delete api.defaults.headers.common["Authorization"];
+	}
 };
 
 export default api;

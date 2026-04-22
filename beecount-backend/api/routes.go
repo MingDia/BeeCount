@@ -131,4 +131,41 @@ func RegisterRoutes(r *gin.Engine) {
 	{
 		stats.GET("", GetStatistics)
 	}
+
+	// 用户认证相关路由
+	auth := api.Group("/auth")
+	{
+		auth.POST("/register", Register)
+		auth.POST("/login", Login)
+	}
+
+	// 需要认证的用户路由
+	user := api.Group("/user")
+	user.Use(AuthMiddleware())
+	{
+		user.GET("/me", GetCurrentUser)
+		user.PUT("/me", UpdateCurrentUser)
+	}
+
+	// 提醒系统相关路由（需要认证）
+	reminders := api.Group("/reminders")
+	reminders.Use(AuthMiddleware())
+	{
+		reminders.GET("", GetReminders)
+		reminders.GET("/pending", GetPendingReminders)
+		reminders.POST("", CreateReminder)
+		reminders.PUT("/:id", UpdateReminder)
+		reminders.DELETE("/:id", DeleteReminder)
+		reminders.PUT("/:id/mark-notified", MarkReminderNotified)
+	}
+
+	// 智能记账相关路由（需要认证）
+	smart := api.Group("/smart")
+	smart.Use(AuthMiddleware())
+	{
+		smart.POST("/classify", SmartClassify)
+		smart.POST("/learn", LearnFromTransaction)
+		smart.GET("/patterns", GetTransactionPatterns)
+		smart.DELETE("/patterns/:id", DeleteTransactionPattern)
+	}
 }

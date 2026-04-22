@@ -23,6 +23,8 @@ func InitDB(cfg *config.Config) error {
 // AutoMigrate 自动迁移数据库表结构
 func AutoMigrate() error {
 	return DB.AutoMigrate(
+		&models.User{},
+		&models.UserLedger{},
 		&models.Ledger{},
 		&models.Account{},
 		&models.Category{},
@@ -32,5 +34,7 @@ func AutoMigrate() error {
 		&models.TransactionTag{},
 		&models.Budget{},
 		&models.TransactionAttachment{},
+		&models.Reminder{},
+		&models.TransactionPattern{},
 	)
 }
