@@ -34,6 +34,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { useApp } from '../contexts/AppContext';
+import { smartAPI } from '../services/api';
 
 function Transactions() {
   const { 
@@ -62,6 +63,7 @@ function Transactions() {
   const [uploadError, setUploadError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredTransactions, setFilteredTransactions] = useState([]);
+  const [smartClassifying, setSmartClassifying] = useState(false);
 
   // 过滤交易
   useEffect(() => {
@@ -223,6 +225,39 @@ function Transactions() {
       } catch (error) {
         console.error('删除附件失败:', error);
       }
+    }
+  };
+
+  const handleSmartClassify = async () => {
+    if (!formData.note && !formData.amount) {
+      alert('请输入备注或金额以进行智能分类');
+      return;
+    }
+
+    setSmartClassifying(true);
+    try {
+      const response = await smartAPI.classify({
+        note: formData.note,
+        amount: formData.amount,
+        type: formData.type,
+      });
+      if (response.data.success) {
+        const suggestedCategory = response.data.data;
+        if (suggestedCategory) {
+          setFormData(prev => ({
+            ...prev,
+            categoryId: suggestedCategory.id,
+          }));
+          alert(`智能分类建议: ${suggestedCategory.name}`);
+        } else {
+          alert('无法智能分类，请手动选择');
+        }
+      }
+    } catch (error) {
+      console.error('智能分类失败:', error);
+      alert('智能分类失败，请手动选择');
+    } finally {
+      setSmartClassifying(false);
     }
   };
 
@@ -400,25 +435,35 @@ function Transactions() {
               />
 
               {formData.type !== 'transfer' && (
-                <FormControl fullWidth>
-                  <InputLabel>分类</InputLabel>
-                  <Select
-                    name="categoryId"
-                    value={formData.categoryId || ''}
-                    label="分类"
-                    onChange={(e) => setFormData(prev => ({ ...prev, categoryId: parseInt(e.target.value) }))}
-                    displayEmpty
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+                  <FormControl fullWidth>
+                    <InputLabel>分类</InputLabel>
+                    <Select
+                      name="categoryId"
+                      value={formData.categoryId || ''}
+                      label="分类"
+                      onChange={(e) => setFormData(prev => ({ ...prev, categoryId: parseInt(e.target.value) }))}
+                      displayEmpty
+                    >
+                      <MenuItem value="">选择分类</MenuItem>
+                      {categories
+                        .filter(c => c.kind === (formData.type === 'income' ? 'income' : 'expense'))
+                        .map((category) => (
+                          <MenuItem key={category.id} value={category.id}>
+                            {category.name}
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                  <Button
+                    variant="outlined"
+                    onClick={handleSmartClassify}
+                    disabled={smartClassifying}
+                    sx={{ height: 56 }}
                   >
-                    <MenuItem value="">选择分类</MenuItem>
-                    {categories
-                      .filter(c => c.kind === (formData.type === 'income' ? 'income' : 'expense'))
-                      .map((category) => (
-                        <MenuItem key={category.id} value={category.id}>
-                          {category.name}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
+                    {smartClassifying ? '分析中...' : '智能分类'}
+                  </Button>
+                </Box>
               )}
 
               <FormControl fullWidth>

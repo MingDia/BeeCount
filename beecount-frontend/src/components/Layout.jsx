@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, Link as RouterLink, useLocation } from 'react-router-dom';
+import { Outlet, Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Drawer,
@@ -18,6 +18,7 @@ import {
   InputLabel,
   Select,
   MenuItem as SelectMenuItem,
+  Button,
 } from '@mui/material';
 import {
   Home,
@@ -32,8 +33,12 @@ import {
   FileDownload,
   BrainCircuit,
   BarChart,
+  Notifications,
+  Logout,
+  Person,
 } from '@mui/icons-material';
 import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const drawerWidth = 240;
 
@@ -45,6 +50,7 @@ const menuItems = [
   { text: '周期交易', icon: <Receipt />, path: '/recurring' },
   { text: '预算', icon: <Budget />, path: '/budgets' },
   { text: '标签', icon: <Label />, path: '/tags' },
+  { text: '提醒', icon: <Notifications />, path: '/reminders' },
   { text: '统计分析', icon: <BarChart />, path: '/statistics' },
   { text: '数据导入/导出', icon: <FileDownload />, path: '/data' },
   { text: 'AI助手', icon: <BrainCircuit />, path: '/ai' },
@@ -55,6 +61,17 @@ function Layout() {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [anchorEl, setAnchorEl] = React.useState(null);
   const { ledgers, selectedLedger, dispatch } = useApp();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -142,20 +159,42 @@ function Layout() {
             <MenuIcon />
           </IconButton>
           <Box sx={{ flexGrow: 1 }} />
-          <IconButton
-            color="inherit"
-            onClick={handleMenuClick}
-          >
-            <AccountCircle />
-          </IconButton>
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleMenuClose}
-          >
-            <MenuItem onClick={handleMenuClose}>设置</MenuItem>
-            <MenuItem onClick={handleMenuClose}>关于</MenuItem>
-          </Menu>
+          {user ? (
+            <>
+              <IconButton
+                color="inherit"
+                onClick={handleMenuClick}
+              >
+                <AccountCircle />
+              </IconButton>
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleMenuClose}
+              >
+                <MenuItem component={RouterLink} to="/profile" onClick={handleMenuClose}>
+                  <Person size={20} sx={{ mr: 1 }} />
+                  个人资料
+                </MenuItem>
+                <MenuItem onClick={handleMenuClose}>设置</MenuItem>
+                <MenuItem onClick={handleMenuClose}>关于</MenuItem>
+                <Divider />
+                <MenuItem onClick={handleLogout}>
+                  <Logout size={20} sx={{ mr: 1 }} />
+                  退出登录
+                </MenuItem>
+              </Menu>
+            </>
+          ) : (
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button color="inherit" component={RouterLink} to="/login">
+                登录
+              </Button>
+              <Button color="inherit" component={RouterLink} to="/register">
+                注册
+              </Button>
+            </Box>
+          )}
         </Toolbar>
       </AppBar>
       <Box
