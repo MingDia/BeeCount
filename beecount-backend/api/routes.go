@@ -168,4 +168,29 @@ func RegisterRoutes(r *gin.Engine) {
 		smart.GET("/patterns", GetTransactionPatterns)
 		smart.DELETE("/patterns/:id", DeleteTransactionPattern)
 	}
+
+	// 账本用户管理相关路由（需要认证）
+	ledgerUsers := api.Group("/ledgers/:ledger_id/users")
+	ledgerUsers.Use(AuthMiddleware())
+	{
+		ledgerUsers.GET("", GetLedgerUsers)
+		ledgerUsers.POST("", AddUserToLedger)
+		ledgerUsers.PUT("/:user_id", UpdateUserRole)
+		ledgerUsers.DELETE("/:user_id", RemoveUserFromLedger)
+	}
+
+	// 通知相关路由（需要认证）
+	notifications := api.Group("/notifications")
+	notifications.Use(AuthMiddleware())
+	{
+		notifications.GET("", GetNotifications)
+	}
+
+	// 调度相关路由（仅管理员，需要认证）
+	scheduler := api.Group("/scheduler")
+	scheduler.Use(AuthMiddleware())
+	{
+		scheduler.POST("/trigger-recurring", TriggerRecurringGeneration)
+		scheduler.POST("/trigger-reminders", TriggerReminderCheck)
+	}
 }

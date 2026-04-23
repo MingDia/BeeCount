@@ -6,6 +6,9 @@ import (
 	"beecount-backend/utils"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,6 +34,13 @@ func main() {
 	if err := utils.MigrateFromOldDB("./old_beecount.db"); err != nil {
 		log.Fatalf("Failed to migrate data: %v", err)
 	}
+
+	// 初始化验证器
+	utils.InitValidator()
+
+	// 初始化调度器
+	utils.InitScheduler()
+	defer utils.StopScheduler()
 
 	// 初始化Gin引擎
 	r := gin.Default()
@@ -58,7 +68,18 @@ func main() {
 	// 启动服务器
 	serverAddr := fmt.Sprintf(":%s", cfg.ServerPort)
 	log.Printf("Server starting on %s", serverAddr)
-	if err := r.Run(serverAddr); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	
+	// 启动服务器
+	go func() {
+		if err := r.Run(serverAddr); err != nil {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+	
+	// 等待中断信号
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	
+	log.Println("Shutting down server...")
 }

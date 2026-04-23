@@ -1898,3 +1898,235 @@ func DeleteTransactionPattern(c *gin.Context) {
 
 	c.JSON(http.StatusOK, Response{Success: true, Message: "Pattern deleted successfully"})
 }
+
+// ==================== 账本用户管理API ====================
+
+// GetLedgerUsers 获取账本的所有用户
+func GetLedgerUsers(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	id, err := strconv.ParseUint(c.Param("ledger_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid ledger ID"})
+		return
+	}
+
+	// 检查权限
+	if !utils.HasPermission(userID.(uint), uint(id), "viewer") {
+		c.JSON(http.StatusForbidden, Response{Success: false, Error: "You don't have access to this ledger"})
+		return
+	}
+
+	var userLedgers []models.UserLedger
+	if err := utils.DB.Where("ledger_id = ?", id).Find(&userLedgers).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	// 获取用户详情
+	var users []models.User
+	userIDs := make([]uint, 0, len(userLedgers))
+	for _, ul := range userLedgers {
+		userIDs = append(userIDs, ul.UserID)
+	}
+
+	if len(userIDs) > 0 {
+		utils.DB.Where("id IN ?", userIDs).Find(&users)
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: map[string]interface{}{
+		"user_ledgers": userLedgers,
+		"users":        users,
+	}})
+}
+
+// AddUserToLedger 添加用户到账本
+func AddUserToLedger(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	ledgerID, err := strconv.ParseUint(c.Param("ledger_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid ledger ID"})
+		return
+	}
+
+	// 检查是否有owner权限
+	if !utils.HasPermission(userID.(uint), uint(ledgerID), "owner") {
+		c.JSON(http.StatusForbidden, Response{Success: false, Error: "You don't have permission to manage users"})
+		return
+	}
+
+	var req struct {
+		UserID uint   `json:"user_id" binding:"required"`
+		Role   string `json:"role" binding:"required,oneof=owner editor viewer"`
+	}
+
+	if errs := utils.ValidateAndBind(c, &req); errs != nil {
+		utils.RespondWithValidationError(c, errs)
+		return
+	}
+
+	// 验证角色
+	if !utils.ValidateLedgerRole(req.Role) {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid role"})
+		return
+	}
+
+	// 检查用户是否存在
+	var user models.User
+	if err := utils.DB.First(&user, req.UserID).Error; err != nil {
+		c.JSON(http.StatusNotFound, Response{Success: false, Error: "User not found"})
+		return
+	}
+
+	// 检查用户是否已经在账本中
+	var existingUserLedger models.UserLedger
+	if err := utils.DB.Where("user_id = ? AND ledger_id = ?", req.UserID, ledgerID).First(&existingUserLedger).Error; err == nil {
+		c.JSON(http.StatusConflict, Response{Success: false, Error: "User already in ledger"})
+		return
+	}
+
+	userLedger := models.UserLedger{
+		UserID:   req.UserID,
+		LedgerID: uint(ledgerID),
+		Role:     req.Role,
+	}
+
+	if err := utils.DB.Create(&userLedger).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, Response{Success: true, Data: userLedger, Message: "User added to ledger successfully"})
+}
+
+// UpdateUserRole 更新用户在账本中的角色
+func UpdateUserRole(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	ledgerID, err := strconv.ParseUint(c.Param("ledger_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid ledger ID"})
+		return
+	}
+
+	targetUserID, err := strconv.ParseUint(c.Param("user_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid user ID"})
+		return
+	}
+
+	// 检查是否有owner权限
+	if !utils.HasPermission(userID.(uint), uint(ledgerID), "owner") {
+		c.JSON(http.StatusForbidden, Response{Success: false, Error: "You don't have permission to manage users"})
+		return
+	}
+
+	// 不能修改自己的角色
+	if userID == targetUserID {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "You can't change your own role"})
+		return
+	}
+
+	var req struct {
+		Role string `json:"role" binding:"required,oneof=owner editor viewer"`
+	}
+
+	if errs := utils.ValidateAndBind(c, &req); errs != nil {
+		utils.RespondWithValidationError(c, errs)
+		return
+	}
+
+	// 验证角色
+	if !utils.ValidateLedgerRole(req.Role) {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid role"})
+		return
+	}
+
+	var userLedger models.UserLedger
+	if err := utils.DB.Where("user_id = ? AND ledger_id = ?", targetUserID, ledgerID).First(&userLedger).Error; err != nil {
+		c.JSON(http.StatusNotFound, Response{Success: false, Error: "User not found in ledger"})
+		return
+	}
+
+	userLedger.Role = req.Role
+	if err := utils.DB.Save(&userLedger).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: userLedger, Message: "User role updated successfully"})
+}
+
+// RemoveUserFromLedger 从账本中移除用户
+func RemoveUserFromLedger(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	ledgerID, err := strconv.ParseUint(c.Param("ledger_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid ledger ID"})
+		return
+	}
+
+	targetUserID, err := strconv.ParseUint(c.Param("user_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "Invalid user ID"})
+		return
+	}
+
+	// 检查是否有owner权限
+	if !utils.HasPermission(userID.(uint), uint(ledgerID), "owner") {
+		c.JSON(http.StatusForbidden, Response{Success: false, Error: "You don't have permission to manage users"})
+		return
+	}
+
+	// 不能移除自己
+	if userID == targetUserID {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Error: "You can't remove yourself from ledger"})
+		return
+	}
+
+	if err := utils.DB.Where("user_id = ? AND ledger_id = ?", targetUserID, ledgerID).Delete(&models.UserLedger{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Message: "User removed from ledger successfully"})
+}
+
+// ==================== 通知和调度相关API ====================
+
+// GetNotifications 获取用户的通知
+func GetNotifications(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+
+	notifications, err := utils.GetPendingNotifications(userID.(uint))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: notifications})
+}
+
+// TriggerRecurringGeneration 手动触发生成周期交易
+func TriggerRecurringGeneration(c *gin.Context) {
+	count, err := utils.ManualTriggerRecurringGeneration()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Message: fmt.Sprintf("Generated %d transactions", count), Data: map[string]int{
+		"generated_count": count,
+	}})
+}
+
+// TriggerReminderCheck 手动触发提醒检查
+func TriggerReminderCheck(c *gin.Context) {
+	count, err := utils.ManualTriggerReminderCheck()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Message: fmt.Sprintf("Sent %d reminders", count), Data: map[string]int{
+		"notified_count": count,
+	}})
+}
