@@ -22,6 +22,8 @@ function Profile() {
 		theme: user?.theme || 'light',
 		language: user?.language || 'zh-CN',
 		fontScale: user?.fontScale || 1.0,
+		openaiApiKey: localStorage.getItem('openai_api_key') || '',
+		openaiBaseUrl: localStorage.getItem('openai_base_url') || 'https://api.openai.com/v1',
 	});
 	const [error, setError] = useState('');
 	const [success, setSuccess] = useState('');
@@ -41,7 +43,16 @@ function Profile() {
 		setSuccess('');
 		setLoading(true);
 
-		const result = await updateUser(formData);
+		// 保存OpenAI API设置到localStorage
+		localStorage.setItem('openai_api_key', formData.openaiApiKey);
+		localStorage.setItem('openai_base_url', formData.openaiBaseUrl);
+
+		// 移除OpenAI API设置，只更新用户信息
+		const userData = { ...formData };
+		delete userData.openaiApiKey;
+		delete userData.openaiBaseUrl;
+
+		const result = await updateUser(userData);
 		if (result.success) {
 			setSuccess('更新成功');
 		} else {
@@ -143,7 +154,34 @@ function Profile() {
 							}}
 							value={formData.fontScale}
 							onChange={handleChange}
-						/>
+					 />
+
+						<Divider sx={{ my: 3 }} />
+
+						<Typography variant="h6" gutterBottom>
+							OpenAI API 设置
+						</Typography>
+
+						<TextField
+							margin="normal"
+							fullWidth
+							id="openaiApiKey"
+							label="API 密钥"
+							name="openaiApiKey"
+							type="password"
+							value={formData.openaiApiKey}
+							onChange={handleChange}
+					 />
+
+						<TextField
+							margin="normal"
+							fullWidth
+							id="openaiBaseUrl"
+							label="Base URL"
+							name="openaiBaseUrl"
+							value={formData.openaiBaseUrl}
+							onChange={handleChange}
+					 />
 						<Button
 							type="submit"
 							fullWidth

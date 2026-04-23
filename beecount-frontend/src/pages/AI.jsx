@@ -20,9 +20,9 @@ import {
 import { Message,
   AccountBalance,
   Receipt,
-  BrainCircuit,
+  Lightbulb,
   Send,
-  RefreshCw } from '@mui/icons-material';
+  Refresh } from '@mui/icons-material';
 import { useApp } from '../contexts/AppContext';
 
 function AI() {
@@ -294,7 +294,7 @@ function AI() {
             <CardActions>
               <Button
                 variant="contained"
-                startIcon={<BrainCircuit />}
+                startIcon={<Lightbulb />}
                 onClick={handleAnalyzeTransaction}
                 disabled={!selectedTransaction || loading}
               >
@@ -350,7 +350,7 @@ function AI() {
             <CardActions>
               <Button
                 variant="contained"
-                startIcon={<RefreshCw />}
+                startIcon={<Refresh />}
                 onClick={handleSuggestBudget}
                 disabled={!selectedLedger || loading}
               >

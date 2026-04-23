@@ -1226,6 +1226,8 @@ func AIChat(c *gin.Context) {
 	type ChatRequest struct {
 		Message string `json:"message"`
 		Context []string `json:"context"`
+		APIKey string `json:"api_key"`
+		BaseURL string `json:"base_url"`
 	}
 
 	var req ChatRequest
@@ -1234,20 +1236,58 @@ func AIChat(c *gin.Context) {
 		return
 	}
 
-	// 这里应该调用OpenAI API
-	// 为了演示，返回模拟数据
-	response := map[string]interface{}{
-		"response": "我是你的记账助手，有什么可以帮你的吗？",
+	// 创建OpenAI客户端
+	config := utils.OpenAIConfig{
+		APIKey:  req.APIKey,
+		BaseURL: req.BaseURL,
+		Model:   "gpt-3.5-turbo",
+	}
+	client := utils.NewOpenAIClient(config)
+
+	// 构建消息
+	messages := []utils.ChatMessage{
+		{
+			Role: "system",
+			Content: "你是一个智能记账助手，帮助用户管理财务、分析支出和提供理财建议。请使用专业、友好的语言回答用户的问题。",
+		},
+	}
+
+	// 添加上下文消息
+	for _, msg := range req.Context {
+		messages = append(messages, utils.ChatMessage{
+			Role: "user",
+			Content: msg,
+		})
+	}
+
+	// 添加当前消息
+	messages = append(messages, utils.ChatMessage{
+		Role: "user",
+		Content: req.Message,
+	})
+
+	// 调用OpenAI API
+	response, err := client.Chat(messages)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: "Failed to call OpenAI API: " + err.Error()})
+		return
+	}
+
+	// 构建响应
+	result := map[string]interface{}{
+		"response": response,
 		"suggestions": []string{"查看本月支出", "设置预算提醒", "分析消费习惯"},
 	}
 
-	c.JSON(http.StatusOK, Response{Success: true, Data: response})
+	c.JSON(http.StatusOK, Response{Success: true, Data: result})
 }
 
 // AnalyzeTransaction 分析交易
 func AnalyzeTransaction(c *gin.Context) {
 	type AnalyzeRequest struct {
 		TransactionID uint `json:"transaction_id"`
+		APIKey string `json:"api_key"`
+		BaseURL string `json:"base_url"`
 	}
 
 	var req AnalyzeRequest
@@ -1263,21 +1303,65 @@ func AnalyzeTransaction(c *gin.Context) {
 		return
 	}
 
-	// 这里应该调用OpenAI API分析交易
-	// 为了演示，返回模拟数据
-	analysis := map[string]interface{}{
-		"transaction": transaction,
-		"analysis": "这笔交易属于日常消费，金额在合理范围内",
-		"suggestions": []string{"可以考虑设置该分类的预算", "建议定期查看此类消费趋势"},
+	// 获取分类信息
+	var category models.Category
+	categoryName := "未分类"
+	if transaction.CategoryID > 0 {
+		if err := utils.DB.First(&category, transaction.CategoryID).Error; err == nil {
+			categoryName = category.Name
+		}
 	}
 
-	c.JSON(http.StatusOK, Response{Success: true, Data: analysis})
+	// 获取账户信息
+	var account models.Account
+	accountName := "未知账户"
+	if transaction.AccountID > 0 {
+		if err := utils.DB.First(&account, transaction.AccountID).Error; err == nil {
+			accountName = account.Name
+		}
+	}
+
+	// 创建OpenAI客户端
+	config := utils.OpenAIConfig{
+		APIKey:  req.APIKey,
+		BaseURL: req.BaseURL,
+		Model:   "gpt-3.5-turbo",
+	}
+	client := utils.NewOpenAIClient(config)
+
+	// 构建交易数据
+	transactionData := map[string]interface{}{
+		"type":     transaction.Type,
+		"amount":   transaction.Amount,
+		"category": categoryName,
+		"account":  accountName,
+		"date":     transaction.HappenedAt,
+		"note":     transaction.Note,
+	}
+
+	// 调用OpenAI API分析交易
+	analysis, suggestions, err := client.AnalyzeTransaction(transactionData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: "Failed to analyze transaction: " + err.Error()})
+		return
+	}
+
+	// 构建响应
+	result := map[string]interface{}{
+		"transaction": transaction,
+		"analysis":    analysis,
+		"suggestions": suggestions,
+	}
+
+	c.JSON(http.StatusOK, Response{Success: true, Data: result})
 }
 
 // SuggestBudget 预算建议
 func SuggestBudget(c *gin.Context) {
 	type BudgetRequest struct {
 		LedgerID uint `json:"ledger_id"`
+		APIKey string `json:"api_key"`
+		BaseURL string `json:"base_url"`
 	}
 
 	var req BudgetRequest
@@ -1293,26 +1377,54 @@ func SuggestBudget(c *gin.Context) {
 		return
 	}
 
-	// 计算总支出
+	// 计算总支出和总收入
 	totalExpense := 0.0
+	totalIncome := 0.0
 	for _, t := range transactions {
 		if t.Type == "expense" {
 			totalExpense += t.Amount
+		} else if t.Type == "income" {
+			totalIncome += t.Amount
 		}
 	}
 
-	// 这里应该调用OpenAI API生成预算建议
-	// 为了演示，返回模拟数据
-	suggestion := map[string]interface{}{
-		"total_expense": totalExpense,
-		"suggested_budget": totalExpense * 0.9, // 建议预算为总支出的90%
-		"category_suggestions": []map[string]interface{}{
-			{"category": "餐饮", "suggested_budget": totalExpense * 0.3},
-			{"category": "交通", "suggested_budget": totalExpense * 0.15},
-			{"category": "购物", "suggested_budget": totalExpense * 0.2},
-			{"category": "娱乐", "suggested_budget": totalExpense * 0.1},
-			{"category": "其他", "suggested_budget": totalExpense * 0.25},
-		},
+	// 计算月度平均支出和收入
+	monthlyExpense := totalExpense / 3 // 假设最近3个月的数据
+	monthlyIncome := totalIncome / 3
+
+	// 获取主要支出分类
+	var categoryTotals map[string]float64 = make(map[string]float64)
+	for _, t := range transactions {
+		if t.Type == "expense" && t.CategoryID > 0 {
+			var category models.Category
+			if err := utils.DB.First(&category, t.CategoryID).Error; err == nil {
+				categoryTotals[category.Name] += t.Amount
+			}
+		}
+	}
+
+	// 构建账本数据
+	ledgerData := map[string]interface{}{
+		"total_expense":   totalExpense,
+		"total_income":    totalIncome,
+		"monthly_expense": monthlyExpense,
+		"monthly_income":  monthlyIncome,
+		"categories":      categoryTotals,
+	}
+
+	// 创建OpenAI客户端
+	config := utils.OpenAIConfig{
+		APIKey:  req.APIKey,
+		BaseURL: req.BaseURL,
+		Model:   "gpt-3.5-turbo",
+	}
+	client := utils.NewOpenAIClient(config)
+
+	// 调用OpenAI API生成预算建议
+	suggestion, err := client.SuggestBudget(ledgerData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Error: "Failed to generate budget suggestion: " + err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, Response{Success: true, Data: suggestion})
@@ -1770,6 +1882,8 @@ func SmartClassify(c *gin.Context) {
 		Type      string `json:"type" binding:"required"` // expense / income
 		Amount    float64 `json:"amount"`
 		AccountID uint `json:"account_id"`
+		APIKey    string `json:"api_key"`
+		BaseURL   string `json:"base_url"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1777,6 +1891,7 @@ func SmartClassify(c *gin.Context) {
 		return
 	}
 
+	// 首先尝试本地模式匹配
 	var patterns []models.TransactionPattern
 	if err := utils.DB.Where("user_id = ? AND type = ?", userID, req.Type).Order("usage_count DESC, confidence DESC").Find(&patterns).Error; err == nil {
 		for _, pattern := range patterns {
@@ -1798,6 +1913,58 @@ func SmartClassify(c *gin.Context) {
 		}
 	}
 
+	// 如果有OpenAI API密钥，则使用OpenAI进行智能分类
+	if req.APIKey != "" {
+		// 创建OpenAI客户端
+		config := utils.OpenAIConfig{
+			APIKey:  req.APIKey,
+			BaseURL: req.BaseURL,
+			Model:   "gpt-3.5-turbo",
+		}
+		client := utils.NewOpenAIClient(config)
+
+		// 调用OpenAI API进行智能分类
+		categoryName, confidence, err := client.SmartClassify(req.Note, req.Amount, req.Type)
+		if err == nil && categoryName != "" {
+			// 查找或创建对应的分类
+			var category models.Category
+			result := utils.DB.Where("name = ? AND kind = ?", categoryName, req.Type).First(&category)
+			if result.Error != nil {
+				// 创建新分类
+				category = models.Category{
+					Name:  categoryName,
+					Kind:  req.Type,
+					Level: 1,
+				}
+				utils.DB.Create(&category)
+			}
+
+			// 保存交易模式
+			if req.Note != "" {
+				pattern := models.TransactionPattern{
+					UserID:      userID.(uint),
+					NotePattern: req.Note,
+					CategoryID:  category.ID,
+					Type:        req.Type,
+					Confidence:  confidence,
+					UsageCount:  1,
+				}
+				utils.DB.Create(&pattern)
+			}
+
+			c.JSON(http.StatusOK, Response{
+				Success: true,
+				Data: map[string]interface{}{
+					"category":   category,
+					"confidence": confidence,
+					"message":    "Classification successful using OpenAI",
+				},
+			})
+			return
+		}
+	}
+
+	// 最后使用默认分类
 	var categories []models.Category
 	utils.DB.Where("kind = ? AND level = 1", req.Type).Find(&categories)
 	if len(categories) > 0 {

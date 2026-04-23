@@ -26,6 +26,16 @@ func RegisterRoutes(r *gin.Engine) {
 
 		// 账本下的预算
 		ledgers.GET("/:id/budgets", GetBudgetsByLedger)
+
+		// 账本用户管理相关路由（需要认证）
+		ledgerUsers := ledgers.Group("/:id/users")
+		ledgerUsers.Use(AuthMiddleware())
+		{
+			ledgerUsers.GET("", GetLedgerUsers)
+			ledgerUsers.POST("", AddUserToLedger)
+			ledgerUsers.PUT("/:user_id", UpdateUserRole)
+			ledgerUsers.DELETE("/:user_id", RemoveUserFromLedger)
+		}
 	}
 
 	// 账户相关路由
@@ -169,15 +179,7 @@ func RegisterRoutes(r *gin.Engine) {
 		smart.DELETE("/patterns/:id", DeleteTransactionPattern)
 	}
 
-	// 账本用户管理相关路由（需要认证）
-	ledgerUsers := api.Group("/ledgers/:ledger_id/users")
-	ledgerUsers.Use(AuthMiddleware())
-	{
-		ledgerUsers.GET("", GetLedgerUsers)
-		ledgerUsers.POST("", AddUserToLedger)
-		ledgerUsers.PUT("/:user_id", UpdateUserRole)
-		ledgerUsers.DELETE("/:user_id", RemoveUserFromLedger)
-	}
+	
 
 	// 通知相关路由（需要认证）
 	notifications := api.Group("/notifications")

@@ -27,6 +27,7 @@ import {
   Paper,
   Alert,
   LinearProgress,
+  Card,
 } from '@mui/material';
 import { Add, Delete, Edit, Search, UploadFile, PictureAsPdf, Cancel } from '@mui/icons-material';
 import { format } from 'date-fns';
@@ -234,12 +235,23 @@ function Transactions() {
       return;
     }
 
+    // 获取用户的OpenAI API设置
+    const apiKey = localStorage.getItem('openai_api_key') || '';
+    const baseUrl = localStorage.getItem('openai_base_url') || '';
+
+    if (!apiKey) {
+      alert('请先在个人设置中配置OpenAI API密钥');
+      return;
+    }
+
     setSmartClassifying(true);
     try {
       const response = await smartAPI.classify({
         note: formData.note,
         amount: formData.amount,
         type: formData.type,
+        api_key: apiKey,
+        base_url: baseUrl,
       });
       if (response.data.success) {
         const suggestedCategory = response.data.data;
@@ -299,110 +311,208 @@ function Transactions() {
         </Box>
 
         {/* 交易列表 */}
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>类型</TableCell>
-                <TableCell>金额</TableCell>
-                <TableCell>分类</TableCell>
-                <TableCell>账户</TableCell>
-                <TableCell>日期</TableCell>
-                <TableCell>备注</TableCell>
-                <TableCell>操作</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredTransactions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} sx={{ textAlign: 'center' }}>
-                    暂无交易记录
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredTransactions.map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell>
+        <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+          {/* 移动端交易列表 */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {filteredTransactions.length === 0 ? (
+              <Box sx={{ p: 4, textAlign: 'center', border: 1, borderColor: 'divider', borderRadius: 2 }}>
+                暂无交易记录
+              </Box>
+            ) : (
+              filteredTransactions.map((transaction) => (
+                <Card key={transaction.id} sx={{ p: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                    <Box>
                       <Chip
                         label={transaction.type === 'income' ? '收入' : transaction.type === 'expense' ? '支出' : '转账'}
                         color={transaction.type === 'income' ? 'success' : transaction.type === 'expense' ? 'error' : 'primary'}
                         size="small"
+                        sx={{ mb: 1 }}
                       />
-                    </TableCell>
-                    <TableCell>
-                      <Typography 
-                        color={transaction.type === 'income' ? 'success.main' : 'error.main'}
-                      >
-                        {transaction.type === 'income' ? '+' : '-'}{' '}¥{transaction.amount.toFixed(2)}
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
+                        {getCategoryName(transaction.categoryId)}
                       </Typography>
-                    </TableCell>
-                    <TableCell>{getCategoryName(transaction.categoryId)}</TableCell>
-                    <TableCell>
-                      {transaction.type === 'transfer' ? (
-                        `${getAccountName(transaction.accountId)} → ${getAccountName(transaction.toAccountId)}`
-                      ) : (
-                        getAccountName(transaction.accountId)
-                      )}
-                    </TableCell>
-                    <TableCell>{format(new Date(transaction.happenedAt), 'yyyy-MM-dd HH:mm')}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <Typography>{transaction.note || '-'}</Typography>
-                        {transaction.tags && transaction.tags.length > 0 && (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
-                            {transaction.tags.map((tag) => (
-                              <Chip 
-                                key={tag.id} 
-                                label={tag.name} 
-                                size="small" 
-                                sx={{ 
-                                  bgcolor: tag.color || 'primary.main',
-                                  color: 'white',
-                                  fontSize: '0.7rem',
-                                  height: 20
-                                }} 
-                              />
-                            ))}
-                          </Box>
-                        )}
-                        {transaction.attachments && transaction.attachments.length > 0 && (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
-                            {transaction.attachments.map((attachment) => (
-                              <Chip 
-                                key={attachment.id} 
-                                label={attachment.originalName} 
-                                size="small" 
-                                sx={{ 
-                                  bgcolor: 'primary.light',
-                                  color: 'primary.contrastText',
-                                  fontSize: '0.7rem',
-                                  height: 20
-                                }}
-                                onClick={() => {
-                                  window.open(`http://localhost:8080/uploads/${attachment.fileName}`, '_blank');
-                                }}
-                              />
-                            ))}
-                          </Box>
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <IconButton onClick={() => handleOpenDialog(transaction)}>
-                          <Edit />
-                        </IconButton>
-                        <IconButton onClick={() => handleDelete(transaction.id)}>
-                          <Delete />
-                        </IconButton>
-                      </Box>
+                    </Box>
+                    <Typography 
+                      variant="h6"
+                      color={transaction.type === 'income' ? 'success.main' : 'error.main'}
+                    >
+                      {transaction.type === 'income' ? '+' : '-'}{' '}¥{transaction.amount.toFixed(2)}
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    {transaction.type === 'transfer' ? (
+                      `${getAccountName(transaction.accountId)} → ${getAccountName(transaction.toAccountId)}`
+                    ) : (
+                      getAccountName(transaction.accountId)
+                    )}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {format(new Date(transaction.happenedAt), 'yyyy-MM-dd HH:mm')}
+                  </Typography>
+                  {transaction.note && (
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      {transaction.note}
+                    </Typography>
+                  )}
+                  {transaction.tags && transaction.tags.length > 0 && (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                      {transaction.tags.map((tag) => (
+                        <Chip 
+                          key={tag.id} 
+                          label={tag.name} 
+                          size="small" 
+                          sx={{ 
+                            bgcolor: tag.color || 'primary.main',
+                            color: 'white',
+                            fontSize: '0.7rem',
+                            height: 20
+                          }} 
+                        />
+                      ))}
+                    </Box>
+                  )}
+                  {transaction.attachments && transaction.attachments.length > 0 && (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                      {transaction.attachments.map((attachment) => (
+                        <Chip 
+                          key={attachment.id} 
+                          label={attachment.originalName} 
+                          size="small" 
+                          sx={{ 
+                            bgcolor: 'primary.light',
+                            color: 'primary.contrastText',
+                            fontSize: '0.7rem',
+                            height: 20
+                          }}
+                          onClick={() => {
+                            window.open(`http://localhost:8080/uploads/${attachment.fileName}`, '_blank');
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                    <IconButton size="small" onClick={() => handleOpenDialog(transaction)}>
+                      <Edit />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => handleDelete(transaction.id)}>
+                      <Delete />
+                    </IconButton>
+                  </Box>
+                </Card>
+              ))
+            )}
+          </Box>
+        </Box>
+        
+        {/* 桌面端交易列表 */}
+        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>类型</TableCell>
+                  <TableCell>金额</TableCell>
+                  <TableCell>分类</TableCell>
+                  <TableCell>账户</TableCell>
+                  <TableCell>日期</TableCell>
+                  <TableCell>备注</TableCell>
+                  <TableCell>操作</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredTransactions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} sx={{ textAlign: 'center' }}>
+                      暂无交易记录
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                ) : (
+                  filteredTransactions.map((transaction) => (
+                    <TableRow key={transaction.id}>
+                      <TableCell>
+                        <Chip
+                          label={transaction.type === 'income' ? '收入' : transaction.type === 'expense' ? '支出' : '转账'}
+                          color={transaction.type === 'income' ? 'success' : transaction.type === 'expense' ? 'error' : 'primary'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography 
+                          color={transaction.type === 'income' ? 'success.main' : 'error.main'}
+                        >
+                          {transaction.type === 'income' ? '+' : '-'}{' '}¥{transaction.amount.toFixed(2)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{getCategoryName(transaction.categoryId)}</TableCell>
+                      <TableCell>
+                        {transaction.type === 'transfer' ? (
+                          `${getAccountName(transaction.accountId)} → ${getAccountName(transaction.toAccountId)}`
+                        ) : (
+                          getAccountName(transaction.accountId)
+                        )}
+                      </TableCell>
+                      <TableCell>{format(new Date(transaction.happenedAt), 'yyyy-MM-dd HH:mm')}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Typography>{transaction.note || '-'}</Typography>
+                          {transaction.tags && transaction.tags.length > 0 && (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
+                              {transaction.tags.map((tag) => (
+                                <Chip 
+                                  key={tag.id} 
+                                  label={tag.name} 
+                                  size="small" 
+                                  sx={{ 
+                                    bgcolor: tag.color || 'primary.main',
+                                    color: 'white',
+                                    fontSize: '0.7rem',
+                                    height: 20
+                                  }} 
+                                />
+                              ))}
+                            </Box>
+                          )}
+                          {transaction.attachments && transaction.attachments.length > 0 && (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
+                              {transaction.attachments.map((attachment) => (
+                                <Chip 
+                                  key={attachment.id} 
+                                  label={attachment.originalName} 
+                                  size="small" 
+                                  sx={{ 
+                                    bgcolor: 'primary.light',
+                                    color: 'primary.contrastText',
+                                    fontSize: '0.7rem',
+                                    height: 20
+                                  }}
+                                  onClick={() => {
+                                    window.open(`http://localhost:8080/uploads/${attachment.fileName}`, '_blank');
+                                  }}
+                                />
+                              ))}
+                            </Box>
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <IconButton onClick={() => handleOpenDialog(transaction)}>
+                            <Edit />
+                          </IconButton>
+                          <IconButton onClick={() => handleDelete(transaction.id)}>
+                            <Delete />
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
 
         {/* 添加/编辑交易对话框 */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
