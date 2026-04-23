@@ -19,6 +19,11 @@ import {
   Select,
   MenuItem as SelectMenuItem,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from '@mui/material';
 import {
   Home,
@@ -35,6 +40,9 @@ import {
   Notifications,
   Logout,
   Person,
+  Add,
+  Edit,
+  Delete,
 } from '@mui/icons-material';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -59,7 +67,14 @@ function Layout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [anchorEl, setAnchorEl] = React.useState(null);
-  const { ledgers, selectedLedger, dispatch } = useApp();
+  const [openLedgerDialog, setOpenLedgerDialog] = React.useState(false);
+  const [editingLedger, setEditingLedger] = React.useState(null);
+  const [ledgerFormData, setLedgerFormData] = React.useState({
+    name: '',
+    description: '',
+    currency: 'CNY',
+  });
+  const { ledgers, selectedLedger, dispatch, createLedger, updateLedger, deleteLedger } = useApp();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -92,6 +107,61 @@ function Layout() {
     }
   };
 
+  const handleOpenLedgerDialog = (ledger = null) => {
+    if (ledger) {
+      setEditingLedger(ledger);
+      setLedgerFormData({
+        name: ledger.name,
+        description: ledger.description || '',
+        currency: ledger.currency || 'CNY',
+      });
+    } else {
+      setEditingLedger(null);
+      setLedgerFormData({
+        name: '',
+        description: '',
+        currency: 'CNY',
+      });
+    }
+    setOpenLedgerDialog(true);
+  };
+
+  const handleCloseLedgerDialog = () => {
+    setOpenLedgerDialog(false);
+    setEditingLedger(null);
+  };
+
+  const handleLedgerSubmit = async () => {
+    try {
+      if (editingLedger) {
+        await updateLedger(editingLedger.id, ledgerFormData);
+      } else {
+        await createLedger(ledgerFormData);
+      }
+      handleCloseLedgerDialog();
+    } catch (error) {
+      console.error('操作失败:', error);
+    }
+  };
+
+  const handleLedgerDelete = async (id) => {
+    if (window.confirm('确定要删除这个账本吗？删除后所有关联的交易数据也会丢失。')) {
+      try {
+        await deleteLedger(id);
+      } catch (error) {
+        console.error('删除失败:', error);
+      }
+    }
+  };
+
+  const handleLedgerFormChange = (e) => {
+    const { name, value } = e.target;
+    setLedgerFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
   const drawer = (
     <div>
       <Toolbar>
@@ -100,11 +170,23 @@ function Layout() {
         </Typography>
       </Toolbar>
       <Box sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <AccountBalance size={16} sx={{ mr: 1 }} />
-          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-            账本
-          </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <AccountBalance size={16} sx={{ mr: 1 }} />
+            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+              账本
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            {selectedLedger && (
+              <IconButton size="small" onClick={() => handleOpenLedgerDialog(selectedLedger)}>
+                <Edit fontSize="small" />
+              </IconButton>
+            )}
+            <IconButton size="small" onClick={() => handleOpenLedgerDialog()}>
+              <Add fontSize="small" />
+            </IconButton>
+          </Box>
         </Box>
         <FormControl fullWidth size="small">
           <Select
@@ -237,6 +319,59 @@ function Layout() {
         <Toolbar />
         <Outlet />
       </Box>
+
+      {/* 账本管理对话框 */}
+      <Dialog open={openLedgerDialog} onClose={handleCloseLedgerDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {editingLedger ? '编辑账本' : '创建账本'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              name="name"
+              label="账本名称"
+              fullWidth
+              required
+              value={ledgerFormData.name}
+              onChange={handleLedgerFormChange}
+            />
+            <TextField
+              name="description"
+              label="描述"
+              multiline
+              rows={2}
+              fullWidth
+              value={ledgerFormData.description}
+              onChange={handleLedgerFormChange}
+            />
+            <TextField
+              name="currency"
+              label="货币"
+              fullWidth
+              value={ledgerFormData.currency}
+              onChange={handleLedgerFormChange}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          {editingLedger && (
+            <Button
+              color="error"
+              onClick={() => {
+                handleLedgerDelete(editingLedger.id);
+                handleCloseLedgerDialog();
+              }}
+              startIcon={<Delete />}
+            >
+              删除
+            </Button>
+          )}
+          <Button onClick={handleCloseLedgerDialog}>取消</Button>
+          <Button onClick={handleLedgerSubmit} variant="contained">
+            {editingLedger ? '保存' : '创建'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
