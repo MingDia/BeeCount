@@ -285,243 +285,179 @@ function Transactions() {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4">交易管理</Typography>
+      <Box sx={{ p: { xs: 2, sm: 3 } }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 3, gap: 2 }}>
+          <Typography 
+            variant="h4"
+            sx={{ 
+              fontSize: { xs: '1.5rem', sm: '2rem' }
+            }}
+          >交易管理</Typography>
           <Button
             variant="contained"
             startIcon={<Add />}
             onClick={() => handleOpenDialog()}
+            fullWidth
+            sx={{ 
+              py: 1.5,
+              fontSize: { xs: '0.875rem', sm: '1rem' }
+            }}
           >
             添加交易
           </Button>
         </Box>
 
         {/* 搜索栏 */}
-        <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
+        <Box sx={{ mb: 3 }}>
           <TextField
             fullWidth
             placeholder="搜索交易..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            size="large"
             InputProps={{
               startAdornment: <Search sx={{ mr: 1 }} />,
             }}
           />
         </Box>
 
-        {/* 交易列表 */}
-        <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-          {/* 移动端交易列表 */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {filteredTransactions.length === 0 ? (
-              <Box sx={{ p: 4, textAlign: 'center', border: 1, borderColor: 'divider', borderRadius: 2 }}>
-                暂无交易记录
-              </Box>
-            ) : (
-              filteredTransactions.map((transaction) => (
-                <Card key={transaction.id} sx={{ p: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                    <Box>
-                      <Chip
-                        label={transaction.type === 'income' ? '收入' : transaction.type === 'expense' ? '支出' : '转账'}
-                        color={transaction.type === 'income' ? 'success' : transaction.type === 'expense' ? 'error' : 'primary'}
-                        size="small"
-                        sx={{ mb: 1 }}
-                      />
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
-                        {getCategoryName(transaction.categoryId)}
-                      </Typography>
-                    </Box>
+        {/* 移动端交易列表 */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {filteredTransactions.length === 0 ? (
+            <Box sx={{ p: 4, textAlign: 'center', border: 1, borderColor: 'divider', borderRadius: 2 }}>
+              暂无交易记录
+            </Box>
+          ) : (
+            filteredTransactions.map((transaction) => (
+              <Card key={transaction.id} sx={{ p: { xs: 2, sm: 2.5 } }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                  <Box>
+                    <Chip
+                      label={transaction.type === 'income' ? '收入' : transaction.type === 'expense' ? '支出' : '转账'}
+                      color={transaction.type === 'income' ? 'success' : transaction.type === 'expense' ? 'error' : 'primary'}
+                      size="small"
+                      sx={{ mb: 1 }}
+                    />
                     <Typography 
-                      variant="h6"
-                      color={transaction.type === 'income' ? 'success.main' : 'error.main'}
+                      variant="subtitle1" 
+                      sx={{ 
+                        fontWeight: 'medium',
+                        fontSize: { xs: '1rem', sm: '1.125rem' }
+                      }}
                     >
-                      {transaction.type === 'income' ? '+' : '-'}{' '}¥{transaction.amount.toFixed(2)}
+                      {getCategoryName(transaction.categoryId)}
                     </Typography>
                   </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    {transaction.type === 'transfer' ? (
-                      `${getAccountName(transaction.accountId)} → ${getAccountName(transaction.toAccountId)}`
-                    ) : (
-                      getAccountName(transaction.accountId)
-                    )}
+                  <Typography 
+                    variant="h6"
+                    color={transaction.type === 'income' ? 'success.main' : 'error.main'}
+                    sx={{ 
+                      fontSize: { xs: '1.25rem', sm: '1.5rem' }
+                    }}
+                  >
+                    {transaction.type === 'income' ? '+' : '-'}{' '}¥{transaction.amount.toFixed(2)}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {format(new Date(transaction.happenedAt), 'yyyy-MM-dd HH:mm')}
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  {transaction.type === 'transfer' ? (
+                    `${getAccountName(transaction.accountId)} → ${getAccountName(transaction.toAccountId)}`
+                  ) : (
+                    getAccountName(transaction.accountId)
+                  )}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  {format(new Date(transaction.happenedAt), 'yyyy-MM-dd HH:mm')}
+                </Typography>
+                {transaction.note && (
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    {transaction.note}
                   </Typography>
-                  {transaction.note && (
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      {transaction.note}
-                    </Typography>
-                  )}
-                  {transaction.tags && transaction.tags.length > 0 && (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-                      {transaction.tags.map((tag) => (
-                        <Chip 
-                          key={tag.id} 
-                          label={tag.name} 
-                          size="small" 
-                          sx={{ 
-                            bgcolor: tag.color || 'primary.main',
-                            color: 'white',
-                            fontSize: '0.7rem',
-                            height: 20
-                          }} 
-                        />
-                      ))}
-                    </Box>
-                  )}
-                  {transaction.attachments && transaction.attachments.length > 0 && (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                      {transaction.attachments.map((attachment) => (
-                        <Chip 
-                          key={attachment.id} 
-                          label={attachment.originalName} 
-                          size="small" 
-                          sx={{ 
-                            bgcolor: 'primary.light',
-                            color: 'primary.contrastText',
-                            fontSize: '0.7rem',
-                            height: 20
-                          }}
-                          onClick={() => {
-                            window.open(`http://localhost:8080/uploads/${attachment.fileName}`, '_blank');
-                          }}
-                        />
-                      ))}
-                    </Box>
-                  )}
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                    <IconButton size="small" onClick={() => handleOpenDialog(transaction)}>
-                      <Edit />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => handleDelete(transaction.id)}>
-                      <Delete />
-                    </IconButton>
-                  </Box>
-                </Card>
-              ))
-            )}
-          </Box>
-        </Box>
-        
-        {/* 桌面端交易列表 */}
-        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>类型</TableCell>
-                  <TableCell>金额</TableCell>
-                  <TableCell>分类</TableCell>
-                  <TableCell>账户</TableCell>
-                  <TableCell>日期</TableCell>
-                  <TableCell>备注</TableCell>
-                  <TableCell>操作</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredTransactions.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} sx={{ textAlign: 'center' }}>
-                      暂无交易记录
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredTransactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell>
-                        <Chip
-                          label={transaction.type === 'income' ? '收入' : transaction.type === 'expense' ? '支出' : '转账'}
-                          color={transaction.type === 'income' ? 'success' : transaction.type === 'expense' ? 'error' : 'primary'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography 
-                          color={transaction.type === 'income' ? 'success.main' : 'error.main'}
-                        >
-                          {transaction.type === 'income' ? '+' : '-'}{' '}¥{transaction.amount.toFixed(2)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{getCategoryName(transaction.categoryId)}</TableCell>
-                      <TableCell>
-                        {transaction.type === 'transfer' ? (
-                          `${getAccountName(transaction.accountId)} → ${getAccountName(transaction.toAccountId)}`
-                        ) : (
-                          getAccountName(transaction.accountId)
-                        )}
-                      </TableCell>
-                      <TableCell>{format(new Date(transaction.happenedAt), 'yyyy-MM-dd HH:mm')}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                          <Typography>{transaction.note || '-'}</Typography>
-                          {transaction.tags && transaction.tags.length > 0 && (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
-                              {transaction.tags.map((tag) => (
-                                <Chip 
-                                  key={tag.id} 
-                                  label={tag.name} 
-                                  size="small" 
-                                  sx={{ 
-                                    bgcolor: tag.color || 'primary.main',
-                                    color: 'white',
-                                    fontSize: '0.7rem',
-                                    height: 20
-                                  }} 
-                                />
-                              ))}
-                            </Box>
-                          )}
-                          {transaction.attachments && transaction.attachments.length > 0 && (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
-                              {transaction.attachments.map((attachment) => (
-                                <Chip 
-                                  key={attachment.id} 
-                                  label={attachment.originalName} 
-                                  size="small" 
-                                  sx={{ 
-                                    bgcolor: 'primary.light',
-                                    color: 'primary.contrastText',
-                                    fontSize: '0.7rem',
-                                    height: 20
-                                  }}
-                                  onClick={() => {
-                                    window.open(`http://localhost:8080/uploads/${attachment.fileName}`, '_blank');
-                                  }}
-                                />
-                              ))}
-                            </Box>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <IconButton onClick={() => handleOpenDialog(transaction)}>
-                            <Edit />
-                          </IconButton>
-                          <IconButton onClick={() => handleDelete(transaction.id)}>
-                            <Delete />
-                          </IconButton>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))
                 )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                {transaction.tags && transaction.tags.length > 0 && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                    {transaction.tags.map((tag) => (
+                      <Chip 
+                        key={tag.id} 
+                        label={tag.name} 
+                        size="small" 
+                        sx={{ 
+                          bgcolor: tag.color || 'primary.main',
+                          color: 'white',
+                          fontSize: '0.7rem',
+                          height: 20
+                        }} 
+                      />
+                    ))}
+                  </Box>
+                )}
+                {transaction.attachments && transaction.attachments.length > 0 && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                    {transaction.attachments.map((attachment) => (
+                      <Chip 
+                        key={attachment.id} 
+                        label={attachment.originalName} 
+                        size="small" 
+                        sx={{ 
+                          bgcolor: 'primary.light',
+                          color: 'primary.contrastText',
+                          fontSize: '0.7rem',
+                          height: 20
+                        }}
+                        onClick={() => {
+                          window.open(`http://localhost:8080/uploads/${attachment.fileName}`, '_blank');
+                        }}
+                      />
+                    ))}
+                  </Box>
+                )}
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                  <IconButton 
+                    size="large" 
+                    onClick={() => handleOpenDialog(transaction)}
+                    sx={{ 
+                      padding: 1.5,
+                      minHeight: 44,
+                      minWidth: 44
+                    }}
+                  >
+                    <Edit />
+                  </IconButton>
+                  <IconButton 
+                    size="large" 
+                    onClick={() => handleDelete(transaction.id)}
+                    sx={{ 
+                      padding: 1.5,
+                      minHeight: 44,
+                      minWidth: 44
+                    }}
+                  >
+                    <Delete />
+                  </IconButton>
+                </Box>
+              </Card>
+            ))
+          )}
         </Box>
 
         {/* 添加/编辑交易对话框 */}
-        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-          <DialogTitle>
+        <Dialog 
+          open={openDialog} 
+          onClose={handleCloseDialog} 
+          maxWidth="sm" 
+          fullWidth
+          sx={{
+            '& .MuiDialog-paper': {
+              margin: { xs: 1, sm: 2 },
+              width: { xs: 'calc(100% - 16px)', sm: 'auto' }
+            }
+          }}
+        >
+          <DialogTitle sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 2.5 } }}>
             {editingTransaction ? '编辑交易' : '添加交易'}
           </DialogTitle>
-          <DialogContent>
-            <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <FormControl fullWidth>
+          <DialogContent sx={{ px: { xs: 2, sm: 3 }, py: { xs: 1, sm: 2 } }}>
+            <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 2.5 } }}>
+              <FormControl fullWidth size="large">
                 <InputLabel>交易类型</InputLabel>
                 <Select
                   name="type"
@@ -540,13 +476,14 @@ function Transactions() {
                 label="金额"
                 type="number"
                 fullWidth
+                size="large"
                 value={formData.amount}
                 onChange={handleChange}
               />
 
               {formData.type !== 'transfer' && (
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-                  <FormControl fullWidth>
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { xs: 'stretch', sm: 'flex-end' } }}>
+                  <FormControl fullWidth size="large">
                     <InputLabel>分类</InputLabel>
                     <Select
                       name="categoryId"
@@ -569,14 +506,15 @@ function Transactions() {
                     variant="outlined"
                     onClick={handleSmartClassify}
                     disabled={smartClassifying}
-                    sx={{ height: 56 }}
+                    sx={{ height: 56, py: 1.5 }}
+                    fullWidth
                   >
                     {smartClassifying ? '分析中...' : '智能分类'}
                   </Button>
                 </Box>
               )}
 
-              <FormControl fullWidth>
+              <FormControl fullWidth size="large">
                 <InputLabel>账户</InputLabel>
                 <Select
                   name="accountId"
@@ -595,7 +533,7 @@ function Transactions() {
               </FormControl>
 
               {formData.type === 'transfer' && (
-                <FormControl fullWidth>
+                <FormControl fullWidth size="large">
                   <InputLabel>目标账户</InputLabel>
                   <Select
                     name="toAccountId"
@@ -621,6 +559,7 @@ function Transactions() {
                 slotProps={{
                   textField: {
                     fullWidth: true,
+                    size: 'large'
                   },
                 }}
               />
@@ -631,11 +570,12 @@ function Transactions() {
                 multiline
                 rows={2}
                 fullWidth
+                size="large"
                 value={formData.note}
                 onChange={handleChange}
               />
 
-              <FormControl fullWidth>
+              <FormControl fullWidth size="large">
                 <InputLabel>标签</InputLabel>
                 <Select
                   multiple
@@ -696,8 +636,16 @@ function Transactions() {
                             </Typography>
                           </Box>
                         </Box>
-                        <IconButton size="small" onClick={() => handleDeleteAttachment(attachment.id)}>
-                          <Cancel size={16} />
+                        <IconButton 
+                          size="large" 
+                          onClick={() => handleDeleteAttachment(attachment.id)}
+                          sx={{ 
+                            padding: 1.5,
+                            minHeight: 44,
+                            minWidth: 44
+                          }}
+                        >
+                          <Cancel size={20} />
                         </IconButton>
                       </Box>
                     ))}
@@ -721,7 +669,6 @@ function Transactions() {
                       if (editingTransaction) {
                         handleFileUpload(e, editingTransaction.id);
                       } else {
-                        // 对于新交易，先创建交易，然后上传附件
                         handleSubmit().then((transactionId) => {
                           if (transactionId) {
                             const formData = new FormData();
@@ -738,7 +685,6 @@ function Transactions() {
                               .then(response => response.json())
                               .then(data => {
                                 if (data.success) {
-                                  // 上传成功，重新加载数据
                                   window.location.reload();
                                 } else {
                                   setUploadError(data.error || '上传失败');
@@ -756,15 +702,17 @@ function Transactions() {
                     };
                     fileInput.click();
                   }}
+                  fullWidth
+                  sx={{ py: 1.5 }}
                 >
                   上传附件
                 </Button>
               </Box>
             </Box>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog}>取消</Button>
-            <Button onClick={handleSubmit} variant="contained">
+          <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: { xs: 1.5, sm: 2 }, gap: 1, flexDirection: { xs: 'column-reverse', sm: 'row' } }}>
+            <Button onClick={handleCloseDialog} fullWidth sx={{ py: 1.5 }}>取消</Button>
+            <Button onClick={handleSubmit} variant="contained" fullWidth sx={{ py: 1.5 }}>
               {editingTransaction ? '保存' : '添加'}
             </Button>
           </DialogActions>

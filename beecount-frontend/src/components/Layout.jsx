@@ -165,35 +165,65 @@ function Layout() {
   const drawer = (
     <div>
       <Toolbar>
-        <Typography variant="h6" noWrap component="div">
+        <Typography 
+          variant="h6" 
+          noWrap 
+          component="div"
+          sx={{ 
+            fontSize: { xs: '1.125rem', sm: '1.25rem' }
+          }}
+        >
           BeeCount
         </Typography>
       </Toolbar>
-      <Box sx={{ p: 2 }}>
+      <Box sx={{ p: { xs: 2, sm: 2 } }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <AccountBalance size={16} sx={{ mr: 1 }} />
-            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+            <AccountBalance sx={{ mr: 1, fontSize: { xs: '1.25rem', sm: '1.5rem' } }} />
+            <Typography 
+              variant="body2" 
+              sx={{ 
+                fontWeight: 'medium',
+                fontSize: { xs: '0.875rem', sm: '1rem' }
+              }}
+            >
               账本
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             {selectedLedger && (
-              <IconButton size="small" onClick={() => handleOpenLedgerDialog(selectedLedger)}>
+              <IconButton 
+                size="large" 
+                onClick={() => handleOpenLedgerDialog(selectedLedger)}
+                sx={{ 
+                  minHeight: 44,
+                  minWidth: 44,
+                  padding: 1
+                }}
+              >
                 <Edit fontSize="small" />
               </IconButton>
             )}
-            <IconButton size="small" onClick={() => handleOpenLedgerDialog()}>
+            <IconButton 
+              size="large" 
+              onClick={() => handleOpenLedgerDialog()}
+              sx={{ 
+                minHeight: 44,
+                minWidth: 44,
+                padding: 1
+              }}
+            >
               <Add fontSize="small" />
             </IconButton>
           </Box>
         </Box>
-        <FormControl fullWidth size="small">
+        <FormControl fullWidth size="large">
           <Select
             value={selectedLedger?.id || ''}
             onChange={handleLedgerChange}
             displayEmpty
             inputProps={{ 'aria-label': '选择账本' }}
+            sx={{ minHeight: 48 }}
           >
             {ledgers.map((ledger) => (
               <SelectMenuItem key={ledger.id} value={ledger.id}>
@@ -204,16 +234,28 @@ function Layout() {
         </FormControl>
       </Box>
       <Divider />
-      <List>
+      <List sx={{ py: { xs: 1, sm: 0 } }}>
         {menuItems.map((item) => (
           <ListItemButton
             key={item.text}
             component={RouterLink}
             to={item.path}
             selected={location.pathname === item.path}
+            sx={{ 
+              minHeight: 56,
+              py: { xs: 1.5, sm: 1 },
+              px: { xs: 2, sm: 2 }
+            }}
           >
-            <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.text} />
+            <ListItemIcon sx={{ minWidth: { xs: 40, sm: 48 } }}>{item.icon}</ListItemIcon>
+            <ListItemText 
+              primary={item.text} 
+              sx={{ 
+                '& .MuiListItemText-primary': {
+                  fontSize: { xs: '0.875rem', sm: '1rem' }
+                }
+              }}
+            />
           </ListItemButton>
         ))}
       </List>
@@ -312,8 +354,8 @@ function Layout() {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
+          p: { xs: 2, sm: 3 },
+          width: { sm: 'calc(100% - 240px)' },
         }}
       >
         <Toolbar />
@@ -321,16 +363,28 @@ function Layout() {
       </Box>
 
       {/* 账本管理对话框 */}
-      <Dialog open={openLedgerDialog} onClose={handleCloseLedgerDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
+      <Dialog 
+        open={openLedgerDialog} 
+        onClose={handleCloseLedgerDialog} 
+        maxWidth="sm" 
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            margin: { xs: 1, sm: 2 },
+            width: { xs: 'calc(100% - 16px)', sm: 'auto' }
+          }
+        }}
+      >
+        <DialogTitle sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 2.5 } }}>
           {editingLedger ? '编辑账本' : '创建账本'}
         </DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <DialogContent sx={{ px: { xs: 2, sm: 3 }, py: { xs: 1, sm: 2 } }}>
+          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 2.5 } }}>
             <TextField
               name="name"
               label="账本名称"
               fullWidth
+              size="large"
               required
               value={ledgerFormData.name}
               onChange={handleLedgerFormChange}
@@ -341,6 +395,7 @@ function Layout() {
               multiline
               rows={2}
               fullWidth
+              size="large"
               value={ledgerFormData.description}
               onChange={handleLedgerFormChange}
             />
@@ -348,12 +403,13 @@ function Layout() {
               name="currency"
               label="货币"
               fullWidth
+              size="large"
               value={ledgerFormData.currency}
               onChange={handleLedgerFormChange}
             />
           </Box>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: { xs: 1.5, sm: 2 }, gap: 1, flexDirection: { xs: 'column-reverse', sm: 'row' } }}>
           {editingLedger && (
             <Button
               color="error"
@@ -362,12 +418,14 @@ function Layout() {
                 handleCloseLedgerDialog();
               }}
               startIcon={<Delete />}
+              fullWidth
+              sx={{ py: 1.5 }}
             >
               删除
             </Button>
           )}
-          <Button onClick={handleCloseLedgerDialog}>取消</Button>
-          <Button onClick={handleLedgerSubmit} variant="contained">
+          <Button onClick={handleCloseLedgerDialog} fullWidth sx={{ py: 1.5 }}>取消</Button>
+          <Button onClick={handleLedgerSubmit} variant="contained" fullWidth sx={{ py: 1.5 }}>
             {editingLedger ? '保存' : '创建'}
           </Button>
         </DialogActions>

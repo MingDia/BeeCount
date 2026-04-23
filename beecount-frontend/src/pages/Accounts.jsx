@@ -87,24 +87,41 @@ function Accounts() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">账户管理</Typography>
+    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 3, gap: 2 }}>
+        <Typography 
+          variant="h4"
+          sx={{ 
+            fontSize: { xs: '1.5rem', sm: '2rem' }
+          }}
+        >账户管理</Typography>
         <Button
           variant="contained"
           startIcon={<Add />}
           onClick={() => handleOpenDialog()}
+          fullWidth
+          sx={{ 
+            py: 1.5,
+            fontSize: { xs: '0.875rem', sm: '1rem' }
+          }}
         >
           添加账户
         </Button>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 2, sm: 3 }}>
         {accounts.map((account) => (
           <Grid item xs={12} sm={6} md={4} key={account.id}>
             <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
+              <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                <Typography 
+                  variant="h6" 
+                  gutterBottom
+                  sx={{ 
+                    fontSize: { xs: '1.125rem', sm: '1.25rem' },
+                    wordBreak: 'break-word'
+                  }}
+                >
                   {account.name}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -113,7 +130,14 @@ function Accounts() {
                 <Typography variant="body2" color="text.secondary" gutterBottom>
                   货币: {account.currency}
                 </Typography>
-                <Typography variant="h5" color="primary" gutterBottom>
+                <Typography 
+                  variant="h5" 
+                  color="primary" 
+                  gutterBottom
+                  sx={{ 
+                    fontSize: { xs: '1.25rem', sm: '1.5rem' }
+                  }}
+                >
                   ¥{account.initialBalance.toFixed(2)}
                 </Typography>
                 {account.note && (
@@ -122,11 +146,27 @@ function Accounts() {
                   </Typography>
                 )}
               </CardContent>
-              <CardActions>
-                <IconButton onClick={() => handleOpenDialog(account)}>
+              <CardActions sx={{ justifyContent: 'flex-end', px: { xs: 1, sm: 2 }, py: 1 }}>
+                <IconButton 
+                  onClick={() => handleOpenDialog(account)}
+                  size="large"
+                  sx={{ 
+                    padding: 1.5,
+                    minHeight: 44,
+                    minWidth: 44
+                  }}
+                >
                   <Edit />
                 </IconButton>
-                <IconButton onClick={() => handleDelete(account.id)}>
+                <IconButton 
+                  onClick={() => handleDelete(account.id)}
+                  size="large"
+                  sx={{ 
+                    padding: 1.5,
+                    minHeight: 44,
+                    minWidth: 44
+                  }}
+                >
                   <Delete />
                 </IconButton>
               </CardActions>
@@ -136,20 +176,32 @@ function Accounts() {
       </Grid>
 
       {/* 添加/编辑账户对话框 */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog} 
+        maxWidth="sm" 
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            margin: { xs: 1, sm: 2 },
+            width: { xs: 'calc(100% - 16px)', sm: 'auto' }
+          }
+        }}
+      >
+        <DialogTitle sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 2.5 } }}>
           {editingAccount ? '编辑账户' : '添加账户'}
         </DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <DialogContent sx={{ px: { xs: 2, sm: 3 }, py: { xs: 1, sm: 2 } }}>
+          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 2.5 } }}>
             <TextField
               name="name"
               label="账户名称"
               fullWidth
+              size="large"
               value={formData.name}
               onChange={handleChange}
             />
-            <FormControl fullWidth>
+            <FormControl fullWidth size="large">
               <InputLabel>账户类型</InputLabel>
               <Select
                 name="type"
@@ -168,6 +220,7 @@ function Accounts() {
               name="currency"
               label="货币"
               fullWidth
+              size="large"
               value={formData.currency}
               onChange={handleChange}
             />
@@ -176,6 +229,7 @@ function Accounts() {
               label="初始余额"
               type="number"
               fullWidth
+              size="large"
               value={formData.initialBalance}
               onChange={handleChange}
             />
@@ -185,14 +239,15 @@ function Accounts() {
               multiline
               rows={2}
               fullWidth
+              size="large"
               value={formData.note}
               onChange={handleChange}
             />
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>取消</Button>
-          <Button onClick={handleSubmit} variant="contained">
+        <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: { xs: 1.5, sm: 2 }, gap: 1, flexDirection: { xs: 'column-reverse', sm: 'row' } }}>
+          <Button onClick={handleCloseDialog} fullWidth sx={{ py: 1.5 }}>取消</Button>
+          <Button onClick={handleSubmit} variant="contained" fullWidth sx={{ py: 1.5 }}>
             {editingAccount ? '保存' : '添加'}
           </Button>
         </DialogActions>

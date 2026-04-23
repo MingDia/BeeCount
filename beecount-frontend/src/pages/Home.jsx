@@ -116,9 +116,25 @@ function Home() {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">
+    <Box sx={{ 
+      p: { xs: 2, sm: 3 }, 
+      maxWidth: '100vw', 
+      overflowX: 'hidden' 
+    }}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: { xs: 'column', sm: 'row' },
+        justifyContent: 'space-between', 
+        alignItems: { xs: 'flex-start', sm: 'center' }, 
+        mb: 3,
+        gap: 2
+      }}>
+        <Typography 
+          variant="h4"
+          sx={{ 
+            fontSize: { xs: '1.5rem', sm: '2rem' }
+          }}
+        >
           {selectedLedger ? selectedLedger.name : '欢迎使用BeeCount'}
         </Typography>
         {selectedLedger && (
@@ -126,6 +142,11 @@ function Home() {
             variant="contained"
             startIcon={<Add />}
             onClick={() => handleOpenDialog()}
+            fullWidth
+            sx={{ 
+              py: 1.5,
+              fontSize: { xs: '0.875rem', sm: '1rem' }
+            }}
           >
             快速添加
           </Button>
@@ -133,46 +154,64 @@ function Home() {
       </Box>
 
       {/* 概览卡片 */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ mb: 4 }}>
         <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
+          <Card sx={{ height: '100%' }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <AttachMoney sx={{ mr: 1, color: 'success.main' }} />
+                <AttachMoney sx={{ mr: 1, color: 'success.main', fontSize: { xs: '1.25rem', sm: '1.5rem' } }} />
                 <Typography variant="subtitle2" color="text.secondary">
                   总收入
                 </Typography>
               </Box>
-              <Typography variant="h4" color="success.main">
+              <Typography 
+                variant="h4"
+                sx={{ 
+                  fontSize: { xs: '1.5rem', sm: '2rem' }
+                }}
+                color="success.main"
+              >
                 ¥{summary.income.toFixed(2)}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
+          <Card sx={{ height: '100%' }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <AccountBalance sx={{ mr: 1, color: 'error.main' }} />
+                <AccountBalance sx={{ mr: 1, color: 'error.main', fontSize: { xs: '1.25rem', sm: '1.5rem' } }} />
                 <Typography variant="subtitle2" color="text.secondary">
                   总支出
                 </Typography>
               </Box>
-              <Typography variant="h4" color="error.main">
+              <Typography 
+                variant="h4"
+                sx={{ 
+                  fontSize: { xs: '1.5rem', sm: '2rem' }
+                }}
+                color="error.main"
+              >
                 ¥{summary.expense.toFixed(2)}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
+          <Card sx={{ height: '100%' }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <Typography variant="subtitle2" color="text.secondary">
                   余额
                 </Typography>
               </Box>
-              <Typography variant="h4" color={summary.balance >= 0 ? 'success.main' : 'error.main'}>
+              <Typography 
+                variant="h4"
+                sx={{ 
+                  fontSize: { xs: '1.5rem', sm: '2rem' }
+                }}
+                color={summary.balance >= 0 ? 'success.main' : 'error.main'}
+              >
                 ¥{summary.balance.toFixed(2)}
               </Typography>
             </CardContent>
@@ -184,25 +223,66 @@ function Home() {
 
       {/* 最近交易 */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h5" gutterBottom>
+        <Typography 
+          variant="h5" 
+          gutterBottom
+          sx={{ 
+            fontSize: { xs: '1.25rem', sm: '1.5rem' }
+          }}
+        >
           最近交易
         </Typography>
         <Card>
-          <List>
+          <List sx={{ p: { xs: 0.5, sm: 0 } }}>
             {recentTransactions.length === 0 ? (
-              <ListItem>
-              <ListItemText primary="暂无交易记录" />
+              <ListItem sx={{ py: 3 }}>
+              <ListItemText 
+                primary="暂无交易记录" 
+                sx={{ textAlign: 'center' }}
+              />
             </ListItem>
             ) : (
               recentTransactions.map((transaction) => (
                 <ListItem
                   key={transaction.id}
+                  sx={{ 
+                    py: { xs: 1.5, sm: 1 },
+                    px: { xs: 1, sm: 2 },
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    alignItems: { xs: 'flex-start', sm: 'center' },
+                    textAlign: { xs: 'left', sm: 'inherit' },
+                    gap: { xs: 1, sm: 0 }
+                  }}
                   secondaryAction={
-                    <Box>
-                      <IconButton edge="end" aria-label="edit" onClick={() => handleOpenDialog(transaction)}>
+                    <Box sx={{ 
+                      mt: { xs: 1, sm: 0 },
+                      display: 'flex', 
+                      gap: 0.5 
+                    }}>
+                      <IconButton 
+                        edge="end" 
+                        aria-label="edit" 
+                        onClick={() => handleOpenDialog(transaction)}
+                        size="large"
+                        sx={{ 
+                          padding: 1.5,
+                          minHeight: 44,
+                          minWidth: 44
+                        }}
+                      >
                         <Edit />
                       </IconButton>
-                      <IconButton edge="end" aria-label="delete" onClick={() => handleDelete(transaction.id)}>
+                      <IconButton 
+                        edge="end" 
+                        aria-label="delete" 
+                        onClick={() => handleDelete(transaction.id)}
+                        size="large"
+                        sx={{ 
+                          padding: 1.5,
+                          minHeight: 44,
+                          minWidth: 44
+                        }}
+                      >
                         <Delete />
                       </IconButton>
                     </Box>
@@ -210,7 +290,7 @@ function Home() {
                 >
                   <ListItemText
                     primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                         <Chip
                           label={transaction.type === 'income' ? '收入' : transaction.type === 'expense' ? '支出' : '转账'}
                           color={transaction.type === 'income' ? 'success' : transaction.type === 'expense' ? 'error' : 'primary'}
@@ -222,7 +302,7 @@ function Home() {
                       </Box>
                     }
                     secondary={
-                      <Box>
+                      <Box sx={{ mt: 0.5 }}>
                         <Typography variant="body2" color="text.secondary">
                           {getAccountName(transaction.accountId)}
                         </Typography>
@@ -232,9 +312,16 @@ function Home() {
                       </Box>
                     }
                   />
-                  <Box sx={{ ml: 2, textAlign: 'right' }}>
+                  <Box sx={{ 
+                    ml: { xs: 0, sm: 2 }, 
+                    textAlign: { xs: 'right', sm: 'right' },
+                    alignSelf: { xs: 'flex-end', sm: 'center' }
+                  }}>
                     <Typography
                       variant="h6"
+                      sx={{ 
+                        fontSize: { xs: '1.25rem', sm: '1.5rem' }
+                      }}
                       color={transaction.type === 'income' ? 'success.main' : 'error.main'}
                     >
                       {transaction.type === 'income' ? '+' : '-'}{' '}¥{transaction.amount.toFixed(2)}
@@ -249,18 +336,44 @@ function Home() {
 
       {/* 账户列表 */}
       <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h5">账户</Typography>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 2 
+        }}>
+          <Typography 
+            variant="h5"
+            sx={{ 
+              fontSize: { xs: '1.25rem', sm: '1.5rem' }
+            }}
+          >账户</Typography>
         </Box>
-        <Grid container spacing={2}>
+        <Grid container spacing={{ xs: 2, sm: 3 }}>
           {accounts.map((account) => (
             <Grid item xs={12} sm={6} md={4} key={account.id}>
               <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="h6">{account.name}</Typography>
-                    <Box>
-                      <IconButton size="small" onClick={() => navigate('/accounts')}>
+                <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography 
+                        variant="h6" 
+                        sx={{ 
+                          fontSize: { xs: '1.125rem', sm: '1.25rem' },
+                          wordBreak: 'break-word'
+                        }}
+                      >{account.name}</Typography>
+                    </Box>
+                    <Box sx={{ ml: 1, flexShrink: 0 }}>
+                      <IconButton 
+                        size="large" 
+                        onClick={() => navigate('/accounts')}
+                        sx={{ 
+                          padding: 1.5,
+                          minHeight: 44,
+                          minWidth: 44
+                        }}
+                      >
                         <Edit />
                       </IconButton>
                     </Box>
@@ -279,13 +392,35 @@ function Home() {
       </Box>
 
       {/* 添加/编辑交易对话框 */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog} 
+        maxWidth="sm" 
+        fullWidth
+        sx={{ 
+          '& .MuiDialog-paper': {
+            margin: { xs: 1, sm: 2 },
+            width: { xs: 'calc(100% - 16px)', sm: 'auto' }
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          px: { xs: 2, sm: 3 },
+          py: { xs: 2, sm: 2.5 }
+        }}>
           {editingTransaction ? '编辑交易' : '快速添加交易'}
         </DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <FormControl fullWidth>
+        <DialogContent sx={{ 
+          px: { xs: 2, sm: 3 },
+          py: { xs: 1, sm: 2 }
+        }}>
+          <Box sx={{ 
+            pt: 1, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: { xs: 2, sm: 2.5 } 
+          }}>
+            <FormControl fullWidth size="large">
               <InputLabel>交易类型</InputLabel>
               <Select
                 name="type"
@@ -304,12 +439,13 @@ function Home() {
               label="金额"
               type="number"
               fullWidth
+              size="large"
               value={formData.amount}
               onChange={handleChange}
             />
 
             {formData.type !== 'transfer' && (
-              <FormControl fullWidth>
+              <FormControl fullWidth size="large">
                 <InputLabel>分类</InputLabel>
                 <Select
                   name="categoryId"
@@ -330,7 +466,7 @@ function Home() {
               </FormControl>
             )}
 
-            <FormControl fullWidth>
+            <FormControl fullWidth size="large">
               <InputLabel>账户</InputLabel>
               <Select
                 name="accountId"
@@ -349,7 +485,7 @@ function Home() {
             </FormControl>
 
             {formData.type === 'transfer' && (
-              <FormControl fullWidth>
+              <FormControl fullWidth size="large">
                 <InputLabel>目标账户</InputLabel>
                 <Select
                   name="toAccountId"
@@ -374,14 +510,29 @@ function Home() {
               multiline
               rows={2}
               fullWidth
+              size="large"
               value={formData.note}
               onChange={handleChange}
             />
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>取消</Button>
-          <Button onClick={handleSubmit} variant="contained">
+        <DialogActions sx={{ 
+          px: { xs: 2, sm: 3 },
+          py: { xs: 1.5, sm: 2 },
+          gap: 1,
+          flexDirection: { xs: 'column-reverse', sm: 'row' }
+        }}>
+          <Button 
+            onClick={handleCloseDialog}
+            fullWidth
+            sx={{ py: 1.5 }}
+          >取消</Button>
+          <Button 
+            onClick={handleSubmit} 
+            variant="contained"
+            fullWidth
+            sx={{ py: 1.5 }}
+          >
             {editingTransaction ? '保存' : '添加'}
           </Button>
         </DialogActions>
